@@ -3,6 +3,7 @@ package adapters
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -36,6 +37,83 @@ func TestOpenCodeRegister_AddsPermissions(t *testing.T) {
 	if bash["monocle *"] != "allow" {
 		t.Errorf("expected monocle * = allow, got %v", bash["monocle *"])
 	}
+}
+
+func TestOpenCodeRegister_SkillsModeInstallsSkillsAndCommands(t *testing.T) {
+	setupTestSkills(t)
+	dir := t.TempDir()
+	projDir := filepath.Join(dir, "project")
+	os.MkdirAll(projDir, 0755)
+
+	origDir, _ := os.Getwd()
+	os.Chdir(projDir)
+	defer os.Chdir(origDir)
+
+	adapter := &OpenCodeAdapter{}
+	if err := adapter.Register(false); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	skillPath := filepath.Join(projDir, ".opencode", "skills", "get-feedback", "SKILL.md")
+	if _, err := os.Stat(skillPath); err != nil {
+		t.Fatalf("skill should be installed: %v", err)
+	}
+
+	commandPath := filepath.Join(projDir, ".opencode", "commands", "get-feedback.md")
+	data, err := os.ReadFile(commandPath)
+	if err != nil {
+		t.Fatalf("command should be installed: %v", err)
+	}
+	if !strings.Contains(string(data), "monocle review get-feedback") {
+		t.Fatalf("command should use CLI feedback command, got:\n%s", string(data))
+	}
+}
+
+func TestOpenCodeConfigPaths_SkillsModeIncludesSkillsAndCommands(t *testing.T) {
+	adapter := &OpenCodeAdapter{}
+	paths := adapter.ConfigPaths(false)
+
+	wantSkill := filepath.Join(".opencode", "skills", "get-feedback", "SKILL.md")
+	wantCommand := filepath.Join(".opencode", "commands", "get-feedback.md")
+	if !containsPath(paths, wantSkill) {
+		t.Fatalf("ConfigPaths missing skill path %q in %#v", wantSkill, paths)
+	}
+	if !containsPath(paths, wantCommand) {
+		t.Fatalf("ConfigPaths missing command path %q in %#v", wantCommand, paths)
+	}
+}
+
+func TestOpenCodeRegister_MCPModeKeepsMCPCommandBodies(t *testing.T) {
+	dir := t.TempDir()
+	projDir := filepath.Join(dir, "project")
+	os.MkdirAll(projDir, 0755)
+
+	origDir, _ := os.Getwd()
+	os.Chdir(projDir)
+	defer os.Chdir(origDir)
+
+	adapter := &OpenCodeAdapter{Mode: ModeMCPTools}
+	if err := adapter.Register(false); err != nil {
+		t.Fatalf("register: %v", err)
+	}
+
+	commandPath := filepath.Join(projDir, ".opencode", "commands", "get-feedback.md")
+	data, err := os.ReadFile(commandPath)
+	if err != nil {
+		t.Fatalf("command should be installed: %v", err)
+	}
+	if !strings.Contains(string(data), "get_feedback") {
+		t.Fatalf("MCP-mode command should reference MCP tool, got:\n%s", string(data))
+	}
+}
+
+func containsPath(paths []string, want string) bool {
+	for _, path := range paths {
+		if path == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestOpenCodeRegister_PreservesExistingConfig(t *testing.T) {

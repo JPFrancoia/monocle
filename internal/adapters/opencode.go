@@ -12,8 +12,8 @@ type OpenCodeAdapter struct {
 	Mode IntegrationMode
 }
 
-func (a *OpenCodeAdapter) Name() string             { return "opencode" }
-func (a *OpenCodeAdapter) Label() string            { return "OpenCode" }
+func (a *OpenCodeAdapter) Name() string              { return "opencode" }
+func (a *OpenCodeAdapter) Label() string             { return "OpenCode" }
 func (a *OpenCodeAdapter) SetMode(m IntegrationMode) { a.Mode = m }
 
 func (a *OpenCodeAdapter) effectiveMode() IntegrationMode {
@@ -29,6 +29,7 @@ func (a *OpenCodeAdapter) ConfigPaths(global bool) []string {
 		paths = append(paths, CommandPaths(openCodeCommandsDir(global), ".md")...)
 	} else {
 		paths = append(paths, SkillPaths(openCodeSkillsDir(global))...)
+		paths = append(paths, CommandPaths(openCodeCommandsDir(global), ".md")...)
 	}
 	return paths
 }
@@ -38,6 +39,11 @@ func (a *OpenCodeAdapter) HasConfig(global bool) bool {
 	dir := openCodeSkillsDir(global)
 	for _, name := range SkillNames {
 		if _, err := os.Stat(filepath.Join(dir, name, "SKILL.md")); err == nil {
+			return true
+		}
+	}
+	for _, name := range CommandNames() {
+		if _, err := os.Stat(filepath.Join(openCodeCommandsDir(global), name+".md")); err == nil {
 			return true
 		}
 	}
@@ -60,7 +66,13 @@ func (a *OpenCodeAdapter) Register(global bool) error {
 		return fmt.Errorf("configure permissions: %w", err)
 	}
 
-	return InstallSkills(openCodeSkillsDir(global))
+	if err := InstallSkills(openCodeSkillsDir(global)); err != nil {
+		return fmt.Errorf("install skills: %w", err)
+	}
+	if err := InstallCLIMarkdownCommands(openCodeCommandsDir(global)); err != nil {
+		return fmt.Errorf("install commands: %w", err)
+	}
+	return nil
 }
 
 func (a *OpenCodeAdapter) Unregister(global bool) error {

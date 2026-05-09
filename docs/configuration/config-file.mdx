@@ -69,3 +69,13 @@ Create either or both files — you only need to include the settings you want t
 <Note>
   Toggle keybindings (`T`, `t`, `w`, `f`) change settings for the current session only. Edit the config file to persist your preferences.
 </Note>
+
+## WakaTime and Wakapi tracking
+
+WakaTime-compatible review tracking is controlled by an environment variable, not by the JSON config file. Set `MONOCLE_WAKATIME_ENABLED=1` when launching monocle:
+
+```bash
+MONOCLE_WAKATIME_ENABLED=1 monocle
+```
+
+monocle invokes `wakatime-cli` and lets it use your existing WakaTime or Wakapi setup. Review activity is reported as `code reviewing` while the TUI is recently active.

@@ -15,6 +15,7 @@ import (
 	"github.com/josephschmitt/monocle/internal/clipboard"
 	"github.com/josephschmitt/monocle/internal/core"
 	"github.com/josephschmitt/monocle/internal/types"
+	"github.com/josephschmitt/monocle/internal/wakatime"
 )
 
 // focusTarget identifies which pane holds keyboard focus.
@@ -183,6 +184,7 @@ type AppOptions struct {
 	ShowSessionPicker bool                    // if true, show session picker modal on startup
 	RepoRoot          string                  // repo root path, used by session picker to list sessions
 	NonGitMode        bool                    // if true, directory mode (no git, show file contents instead of diffs)
+	WakaTimeTracker   *wakatime.Tracker       // optional TUI activity tracker
 }
 
 // appModel is the root model that composes all sub-models.
@@ -238,6 +240,8 @@ type appModel struct {
 
 	nonGitMode bool            // directory mode (no git)
 	infoBanner infoBannerModel // info modal for non-git startup
+
+	wakatimeTracker *wakatime.Tracker
 }
 
 // NewApp creates the root appModel and wires up all subsystems.
@@ -335,6 +339,7 @@ func NewApp(engine core.EngineAPI, opts ...AppOptions) appModel {
 		repoRoot:          o.RepoRoot,
 		repoInfo:          repoInfo,
 		nonGitMode:        o.NonGitMode,
+		wakatimeTracker:   o.WakaTimeTracker,
 	}
 }
 
@@ -498,6 +503,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Periodic refresh — fires on a timer to keep the file list and diff in sync.
 	case refreshTickMsg:
+		m.reportWakaTimeTick(m.currentWakaTimeTarget())
 		cmds := []tea.Cmd{m.refreshFiles(), refreshTick()}
 		if time.Since(m.repoInfoUpdatedAt) >= repoInfoRefreshInterval {
 			if cmd := m.loadRepoInfo(); cmd != nil {
@@ -1388,22 +1394,27 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyPressMsg:
+		m.reportWakaTimeActivity(m.currentWakaTimeTarget())
 		return m.handleKey(msg)
 
 	case tea.MouseClickMsg:
 		if m.mouseEnabled {
+			m.reportWakaTimeActivity(m.currentWakaTimeTarget())
 			return m.handleMouseClick(msg)
 		}
 	case tea.MouseWheelMsg:
 		if m.mouseEnabled {
+			m.reportWakaTimeActivity(m.currentWakaTimeTarget())
 			return m.handleMouseWheel(msg)
 		}
 	case tea.MouseMotionMsg:
 		if m.mouseEnabled {
+			m.reportWakaTimeActivity(m.currentWakaTimeTarget())
 			return m.handleMouseMotion(msg)
 		}
 	case tea.MouseReleaseMsg:
 		if m.mouseEnabled {
+			m.reportWakaTimeActivity(m.currentWakaTimeTarget())
 			return m.handleMouseRelease(msg)
 		}
 
@@ -2270,8 +2281,83 @@ func (m *appModel) autoToggleSidebar() bool {
 	return false
 }
 
+func (m appModel) reportWakaTimeActivity(target wakatime.Target) {
+	if m.wakatimeTracker == nil {
+		return
+	}
+	m.wakatimeTracker.Activity(target)
+}
+
+func (m appModel) reportWakaTimeTick(target wakatime.Target) {
+	if m.wakatimeTracker == nil {
+		return
+	}
+	m.wakatimeTracker.Tick(target)
+}
+
+func (m appModel) currentWakaTimeTarget() wakatime.Target {
+	if m.diffView.additionalFilePath != "" {
+		return wakatime.FileTarget(m.diffView.additionalFilePath)
+	}
+	if m.diffView.isViewingContentItem() {
+		return m.wakaTimeArtifactTarget(m.diffView.contentID, m.diffView.contentTitle)
+	}
+	if m.diffView.path != "" {
+		return m.wakaTimeFileTarget(m.diffView.path)
+	}
+	if item := m.sidebar.selectedContentItem(); item != nil {
+		return m.wakaTimeArtifactTarget(item.ID, item.Title)
+	}
+	if file := m.sidebar.selectedFile(); file != nil {
+		return m.wakaTimeFileTarget(file.Path)
+	}
+	if file := m.sidebar.selectedAdditionalFile(); file != nil {
+		return wakatime.FileTarget(file.Path)
+	}
+	return wakatime.Target{}
+}
+
+func (m appModel) wakaTimeTargetForSidebarSelect(msg sidebarSelectMsg) wakatime.Target {
+	if msg.isContent {
+		title := msg.contentID
+		for _, item := range m.sidebar.contentItems {
+			if item.ID == msg.contentID {
+				title = item.Title
+				break
+			}
+		}
+		return m.wakaTimeArtifactTarget(msg.contentID, title)
+	}
+	if msg.isAdditionalFile {
+		return wakatime.FileTarget(msg.path)
+	}
+	return m.wakaTimeFileTarget(msg.path)
+}
+
+func (m appModel) wakaTimeFileTarget(path string) wakatime.Target {
+	if path == "" {
+		return wakatime.Target{}
+	}
+	if filepath.IsAbs(path) || m.repoRoot == "" {
+		return wakatime.FileTarget(path)
+	}
+	return wakatime.FileTarget(filepath.Join(m.repoRoot, path))
+}
+
+func (m appModel) wakaTimeArtifactTarget(id, title string) wakatime.Target {
+	label := strings.TrimSpace(title)
+	if label == "" {
+		label = strings.TrimSpace(id)
+	}
+	if label == "" {
+		return wakatime.Target{}
+	}
+	return wakatime.AppTarget("monocle artifact: " + label)
+}
+
 // handleSidebarSelect loads the diff for the selected file or content item.
 func (m appModel) handleSidebarSelect(msg sidebarSelectMsg) tea.Cmd {
+	m.reportWakaTimeActivity(m.wakaTimeTargetForSidebarSelect(msg))
 	if msg.isContent {
 		return func() tea.Msg {
 			item, err := m.engine.GetContentItem(msg.contentID)

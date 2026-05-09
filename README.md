@@ -40,7 +40,7 @@ monocle register          # interactive picker
 monocle register claude   # or: opencode, codex, gemini, all
 ```
 
-This configures MCP tools or skills depending on the agent. Claude Code gets an MCP server and slash commands; other agents get skill files. Use `--global` to write to the user-level config directory instead of the project. Override the default with `--integration-mode mcp` or `--integration-mode skills`.
+This configures MCP tools or skills depending on the agent. Claude Code gets an MCP server and slash commands; OpenCode gets skills and slash commands; other agents get skill files. Use `--global` to write to the user-level config directory instead of the project. Override the default with `--integration-mode mcp` or `--integration-mode skills`.
 
 #### Other agents
 
@@ -57,7 +57,7 @@ Start your agent and Monocle in separate terminals:
 monocle
 ```
 
-For Claude Code, Monocle registers an MCP server that exposes review tools directly — no bash permissions or skills needed. Other agents get [skills](#agent-operations) that instruct them to run CLI commands.
+For Claude Code, Monocle registers an MCP server that exposes review tools directly, with no bash permissions or skills needed. OpenCode gets [skills](#agent-operations) and matching slash commands that run CLI commands. Other agents get skills that instruct them to run CLI commands.
 
 #### Push notifications (Claude Code only)
 
@@ -308,6 +308,16 @@ Monocle loads settings from JSON config files:
 | `review_format.include_summary`      | `true`, `false`                            | `true`       | Include comment count summary in formatted reviews                       |
 
 Toggle keybindings (`T`, `t`, `w`, `f`) change settings for the current session only. Edit the config file to persist your preferences.
+
+### WakaTime / Wakapi tracking
+
+Set `MONOCLE_WAKATIME_ENABLED=1` when launching Monocle to send review-time heartbeats through `wakatime-cli`:
+
+```bash
+MONOCLE_WAKATIME_ENABLED=1 monocle
+```
+
+Monocle does not read `.wakatime.cfg` directly. `wakatime-cli` handles your WakaTime or Wakapi setup, offline queueing, and API URL routing. Review activity is reported with the `code reviewing` category, rate-limited to one heartbeat every two minutes while the TUI is recently active.
 
 ### Custom Keybindings
 

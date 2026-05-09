@@ -18,14 +18,14 @@ description: "Get monocle running alongside your AI coding agent in minutes."
 
     The interactive picker lets you select which agents to register. Pass a named agent — `claude`, `opencode`, `codex`, `gemini`, or `all` — to skip the picker. Use `--global` to write to your user-level config directory instead of the current project.
 
-    This installs skills into the agent-specific directory for your project and, for Claude Code, also writes the MCP channel config to `.mcp.json` for push notifications.
+    This installs skills into the agent-specific directory for your project. For Claude Code, it also writes the MCP channel config to `.mcp.json` for push notifications. For OpenCode, it also installs slash commands into `.opencode/commands/`.
 
-    | Agent | Skills directory | MCP config |
-    |---|---|---|
-    | Claude Code | `.claude/skills/` | `.mcp.json` |
-    | OpenCode | `.opencode/skills/` | — |
-    | Codex CLI | `.codex/skills/` | — |
-    | Gemini CLI | `.gemini/skills/` | — |
+    | Agent | Skills directory | Commands | MCP config |
+    |---|---|---|---|
+    | Claude Code | `.claude/skills/` | — | `.mcp.json` |
+    | OpenCode | `.opencode/skills/` | `.opencode/commands/` | — |
+    | Codex CLI | `.codex/skills/` | — | — |
+    | Gemini CLI | `.gemini/skills/` | — | — |
   </Step>
 
   <Step title="Start monocle">

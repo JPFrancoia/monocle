@@ -18,6 +18,7 @@ import (
 	"github.com/josephschmitt/monocle/internal/protocol"
 	"github.com/josephschmitt/monocle/internal/tui"
 	"github.com/josephschmitt/monocle/internal/tui/register"
+	"github.com/josephschmitt/monocle/internal/wakatime"
 )
 
 var version = "dev"
@@ -765,6 +766,14 @@ func runTUI(socketOverride string, workdir string, additionalPaths []string, con
 	}
 	if resumePicker {
 		appOpts.ShowSessionPicker = true
+	}
+	if tracker, err := wakatime.NewFromEnv(repoRoot, version); err == nil {
+		appOpts.WakaTimeTracker = tracker
+		if tracker != nil {
+			defer tracker.Stop()
+		}
+	} else if wakatime.EnabledFromEnv() {
+		fmt.Fprintf(os.Stderr, "Warning: WakaTime tracking disabled: %v\n", err)
 	}
 
 	app := tui.NewApp(engine, appOpts)

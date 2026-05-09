@@ -6,7 +6,7 @@ description: "How monocle connects to your AI coding agent via MCP tools, skills
 Monocle integrates with your agent through one of two modes: **MCP tools** or **skills**. Both expose the same operations — the difference is how the agent invokes them.
 
 - **MCP tools mode** runs a built-in MCP server (`monocle serve-mcp`) that exposes review operations as tools the agent calls directly. This is the default for Claude Code.
-- **Skills mode** installs `SKILL.md` instruction files ([agentskills.io](https://agentskills.io) format) that tell the agent which `monocle review` CLI commands to run. This is the default for all other agents.
+- **Skills mode** installs `SKILL.md` instruction files ([agentskills.io](https://agentskills.io) format) that tell the agent which `monocle review` CLI commands to run. OpenCode also gets matching slash commands. This is the default for all other agents.
 
 You can override the default with `--integration-mode` when registering. See [agent setup](/guides/agent-setup) for details.
 
@@ -45,7 +45,7 @@ This is what enables [review gating](/guides/review-gating): the agent cannot mo
 
 ## Registration
 
-`monocle register` writes the appropriate config for your agent. In MCP tools mode, it configures an MCP server entry and installs slash commands. In skills mode, it writes skill files to the agent's skill directory.
+`monocle register` writes the appropriate config for your agent. In MCP tools mode, it configures an MCP server entry and installs slash commands. In skills mode, it writes skill files to the agent's skill directory; OpenCode also gets slash commands.
 
 <CodeGroup>
 
@@ -58,7 +58,7 @@ monocle register claude --integration-mode skills
 ```
 
 ```bash OpenCode
-# Default: skills mode — installs to .opencode/skills/
+# Default: skills mode — installs to .opencode/skills/ and .opencode/commands/
 monocle register opencode
 ```
 
