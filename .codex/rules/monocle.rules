@@ -1,5 +1,0 @@
-prefix_rule(
-    pattern=["monocle"],
-    decision="allow",
-    justification="Allow monocle code review commands",
-)

@@ -25,63 +25,11 @@ Monocle gives you a proper review loop without slowing the agent down. It doesn'
 
 ## Installation
 
-### Homebrew (macOS/Linux)
-
 ```bash
-brew install josephschmitt/tap/monocle
-```
-
-<details>
-<summary>Other installation methods</summary>
-
-#### Pre-built Binaries
-
-Download from [GitHub Releases](https://github.com/josephschmitt/monocle/releases):
-
-**macOS:**
-```bash
-# Apple Silicon
-# x-release-please-start-version
-curl -Lo monocle.tar.gz https://github.com/josephschmitt/monocle/releases/download/v0.46.1/monocle_darwin_arm64.tar.gz
-# x-release-please-end
-tar xzf monocle.tar.gz
-sudo mv monocle /usr/local/bin/
-
-# Intel
-# x-release-please-start-version
-curl -Lo monocle.tar.gz https://github.com/josephschmitt/monocle/releases/download/v0.46.1/monocle_darwin_amd64.tar.gz
-# x-release-please-end
-tar xzf monocle.tar.gz
-sudo mv monocle /usr/local/bin/
-```
-
-**Linux:**
-```bash
-# x86_64
-# x-release-please-start-version
-curl -Lo monocle.tar.gz https://github.com/josephschmitt/monocle/releases/download/v0.46.1/monocle_linux_amd64.tar.gz
-# x-release-please-end
-tar xzf monocle.tar.gz
-sudo mv monocle /usr/local/bin/
-
-# ARM64
-# x-release-please-start-version
-curl -Lo monocle.tar.gz https://github.com/josephschmitt/monocle/releases/download/v0.46.1/monocle_linux_arm64.tar.gz
-# x-release-please-end
-tar xzf monocle.tar.gz
-sudo mv monocle /usr/local/bin/
-```
-
-#### From Source
-
-```bash
-git clone https://github.com/josephschmitt/monocle.git
-cd monocle
 make build
-# Binaries are in bin/
 ```
 
-</details>
+The binary is written to `bin/monocle`. Run `make install` if you want it in your Go bin directory.
 
 ## Quick Start
 
@@ -99,7 +47,7 @@ This configures MCP tools or skills depending on the agent. Claude Code gets an 
 If your agent isn't natively supported, you can set up Monocle manually:
 
 - **MCP tools**: If your agent supports MCP servers via stdio, point it at `monocle serve-mcp`. This exposes review tools (`review_status`, `get_feedback`, `send_artifact`, `add_files`) over stdio.
-- **Skills**: Download `skills.tar.gz` from the [latest release](https://github.com/josephschmitt/monocle/releases/latest) and extract the skill files into wherever your agent expects its skills.
+- **Skills**: Copy the local `skills/` directory into wherever your agent expects skill files.
 
 ### 2. Start reviewing
 

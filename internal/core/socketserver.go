@@ -190,8 +190,12 @@ func (s *SocketServer) Shutdown() error {
 }
 
 func (s *SocketServer) acceptLoop() {
+	listener := s.listener
+	if listener == nil {
+		return
+	}
 	for {
-		conn, err := s.listener.Accept()
+		conn, err := listener.Accept()
 		if err != nil {
 			return // listener was closed
 		}

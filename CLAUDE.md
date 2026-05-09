@@ -40,7 +40,7 @@ Agents interact with Monocle via **MCP tools** (recommended for Claude Code) or 
 
 ```
 cmd/monocle/          Main CLI entry point (Kong commands, including monocle review subcommands)
-skills/               Embedded SKILL.md files (agentskills.io format) shared by all agents
+skills/               Local SKILL.md source files (agentskills.io format) shared by all agents
 internal/
   types/              Domain types (ReviewSession, ChangedFile, ReviewComment, Config)
   protocol/           NDJSON message types + marshal/unmarshal (GetReviewStatus, PollFeedback, SubmitContent)
@@ -99,16 +99,15 @@ User reviews, adds comments, submits → FeedbackQueue releases → notification
 - **DB tests**: Use `:memory:` SQLite
 - **Git tests**: Create temp repos with `setupTestRepo(t)`
 - **Nerd Font icons**: Glyphs render wider than `lipgloss.Width()` measures. Use `iconSlack` compensation in layout math.
-- **Conventional commits**: **All commit messages MUST use conventional commit format.** Release-please uses these to determine version bumps and generate changelogs.
+- **Conventional commits**: Prefer conventional commit format for readable local history.
   - `feat: ...` — New feature (minor version bump)
   - `fix: ...` — Bug fix (patch version bump)
-  - `chore: ...` — Maintenance, deps, CI (no release)
-  - `refactor: ...` — Code restructuring (no release)
-  - `docs: ...` — Documentation only (no release)
-  - `test: ...` — Test changes (no release)
-  - `feat!: ...` or `BREAKING CHANGE:` in body — Breaking change (major version bump)
+  - `chore: ...` — Maintenance and dependencies
+  - `refactor: ...` — Code restructuring
+  - `docs: ...` — Documentation only
+  - `test: ...` — Test changes
+  - `feat!: ...` or `BREAKING CHANGE:` in body — Breaking change
   - Scope is optional: `feat(tui): ...`, `fix(db): ...`
-  - **Website & docs changes** (`website/`, `docs/`) should use `docs: ...` to avoid triggering releases. These paths are also excluded in `release-please-config.json`.
 
 ## Documentation
 
@@ -145,11 +144,3 @@ When Monocle is running, use the `/review-plan` or `/review-plan-wait` skills to
 - `monocle review send-artifact --title "..." --file <path> --id <filename> --wait` — send and block until the reviewer responds
 - `monocle review get-feedback` — retrieve pending feedback
 - `monocle review status` — check if feedback is pending or a pause was requested
-
-## Release Process
-
-Automated via release-please + goreleaser:
-1. Push conventional commits to `main`
-2. Release-please creates/updates a release PR
-3. Merge the PR → tag is created
-4. Goreleaser builds linux/darwin/windows (amd64+arm64), publishes to GitHub Releases + Homebrew tap

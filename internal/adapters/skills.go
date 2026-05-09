@@ -38,13 +38,10 @@ func resolveSkillsSource() (string, error) {
 	if SkillsSourceOverride != "" {
 		return SkillsSourceOverride, nil
 	}
-	if Version == "dev" {
-		if _, err := os.Stat("skills"); err == nil {
-			return "skills", nil
-		}
-		return "", fmt.Errorf("skills directory not found (dev build must be run from repo root)")
+	if _, err := os.Stat("skills"); err == nil {
+		return "skills", nil
 	}
-	return EnsureSkillsCached(Version)
+	return "", fmt.Errorf("skills directory not found (run from repo root)")
 }
 
 // RemoveSkills removes installed skill directories from the given parent directory.

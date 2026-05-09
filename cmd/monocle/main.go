@@ -127,8 +127,6 @@ type UninstallCmd struct {
 }
 
 func main() {
-	adapters.Version = version
-
 	cli := CLI{}
 	ctx := kong.Parse(&cli,
 		kong.Name("monocle"),

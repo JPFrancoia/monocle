@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "Install monocle on macOS or Linux."
+description: "Build monocle for local use."
 ---
 
 ## Requirements
@@ -11,64 +11,33 @@ Before installing monocle, make sure you have:
 - A terminal with 256-color or true color support
 - A [Nerd Font](https://www.nerdfonts.com/) for file icons (optional but recommended)
 
-## Homebrew (recommended)
+## Build locally
 
-The simplest way to install monocle on macOS or Linux:
+Build monocle from this checkout:
 
 ```bash
-brew install josephschmitt/tap/monocle
+make build
 ```
 
-## Pre-built binaries
-
-Download and install a pre-built binary for your platform from [GitHub Releases](https://github.com/josephschmitt/monocle/releases/latest).
-
-<CodeGroup>
-
-```bash macOS (Apple Silicon)
-curl -Lo monocle.tar.gz https://github.com/josephschmitt/monocle/releases/latest/download/monocle_darwin_arm64.tar.gz
-tar xzf monocle.tar.gz
-sudo mv monocle /usr/local/bin/
-```
-
-```bash macOS (Intel)
-curl -Lo monocle.tar.gz https://github.com/josephschmitt/monocle/releases/latest/download/monocle_darwin_amd64.tar.gz
-tar xzf monocle.tar.gz
-sudo mv monocle /usr/local/bin/
-```
-
-```bash Linux (x86_64)
-curl -Lo monocle.tar.gz https://github.com/josephschmitt/monocle/releases/latest/download/monocle_linux_amd64.tar.gz
-tar xzf monocle.tar.gz
-sudo mv monocle /usr/local/bin/
-```
-
-```bash Linux (ARM64)
-curl -Lo monocle.tar.gz https://github.com/josephschmitt/monocle/releases/latest/download/monocle_linux_arm64.tar.gz
-tar xzf monocle.tar.gz
-sudo mv monocle /usr/local/bin/
-```
-
-</CodeGroup>
+The binary is written to `bin/monocle`. Run `make install` if you want it in your Go bin directory.
 
 ## Verify the installation
 
 After installing, confirm monocle is available:
 
 ```bash
-monocle --version
+./bin/monocle --version
 ```
 
 ## Uninstall
 
-To remove monocle and its agent registrations:
+To remove local agent registrations:
 
 ```bash
-monocle unregister all
-brew uninstall monocle
+./bin/monocle unregister all
 ```
 
-If you installed from source, run `make uninstall` from the repo directory.
+Run `make uninstall` if you installed the binary with `make install`.
 
 ## Next steps
 

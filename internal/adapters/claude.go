@@ -119,8 +119,8 @@ var claudeHooks = []claudeHookEntry{
 	},
 }
 
-func (a *ClaudeAdapter) Name() string          { return "claude" }
-func (a *ClaudeAdapter) Label() string         { return "Claude Code" }
+func (a *ClaudeAdapter) Name() string              { return "claude" }
+func (a *ClaudeAdapter) Label() string             { return "Claude Code" }
 func (a *ClaudeAdapter) SetMode(m IntegrationMode) { a.Mode = m }
 
 // ConfigPaths returns the files written by Register.
@@ -140,16 +140,9 @@ func (a *ClaudeAdapter) ConfigPaths(global bool) []string {
 	return paths
 }
 
-// HasConfig returns true if monocle is configured at the given scope via .mcp.json or Claude Code plugin.
+// HasConfig returns true if monocle is configured at the given scope via .mcp.json.
 func (a *ClaudeAdapter) HasConfig(global bool) bool {
-	if hasMCPServersEntry(mcpJSONPath(global)) {
-		return true
-	}
-	// Plugin config is always user-level (global)
-	if global {
-		return a.HasPluginConfig()
-	}
-	return false
+	return hasMCPServersEntry(mcpJSONPath(global))
 }
 
 // Detect returns true if Claude Code appears to be installed.
@@ -234,60 +227,10 @@ func (a *ClaudeAdapter) HasMCPConfig() bool {
 	return false
 }
 
-// HasPluginConfig checks if monocle is installed as a Claude Code plugin.
-// Returns true if ~/.claude/plugins/installed_plugins.json contains a monocle@* entry
-// with user scope (global) or project scope matching the current working directory.
-func (a *ClaudeAdapter) HasPluginConfig() bool {
-	path := installedPluginsPath()
-	data, err := ReadJSONFile(path)
-	if err != nil {
-		return false
-	}
-	plugins, ok := data["plugins"].(map[string]any)
-	if !ok {
-		return false
-	}
-
-	cwd, _ := os.Getwd()
-	if resolved, err := filepath.EvalSymlinks(cwd); err == nil {
-		cwd = resolved
-	}
-
-	for key, val := range plugins {
-		if !strings.HasPrefix(key, "monocle@") {
-			continue
-		}
-		entries, ok := val.([]any)
-		if !ok {
-			continue
-		}
-		for _, e := range entries {
-			entry, ok := e.(map[string]any)
-			if !ok {
-				continue
-			}
-			scope, _ := entry["scope"].(string)
-			if scope == "user" {
-				return true
-			}
-			if scope == "project" {
-				projectPath, _ := entry["projectPath"].(string)
-				if resolved, err := filepath.EvalSymlinks(projectPath); err == nil {
-					projectPath = resolved
-				}
-				if projectPath != "" && cwd != "" && strings.HasPrefix(cwd, projectPath) {
-					return true
-				}
-			}
-		}
-	}
-	return false
-}
-
-// NeedsRegister returns true if monocle is not configured via .mcp.json or Claude Code plugin.
+// NeedsRegister returns true if monocle is not configured via .mcp.json.
 // This includes cases where an old-style config exists (e.g., pointing to bun/node directly).
 func (a *ClaudeAdapter) NeedsRegister() bool {
-	return !a.HasMCPConfig() && !a.HasPluginConfig()
+	return !a.HasMCPConfig()
 }
 
 // effectiveMode returns the integration mode, defaulting to MCP tools.
@@ -387,15 +330,6 @@ func hasMCPServersEntry(path string) bool {
 		}
 	}
 	return false
-}
-
-// installedPluginsPath returns the path to Claude Code's installed plugins registry.
-func installedPluginsPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return ""
-	}
-	return filepath.Join(home, ".claude", "plugins", "installed_plugins.json")
 }
 
 // claudeSettingsPath returns the path for .claude/settings.json.
@@ -694,4 +628,3 @@ func mcpJSONPath(global bool) string {
 	}
 	return ".mcp.json"
 }
-

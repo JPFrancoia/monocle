@@ -53,7 +53,7 @@ See the [CLI reference](/reference/cli#monocle-register) for a full list of flag
     Claude Code supports [MCP channels](https://code.claude.com/docs/en/channels-reference), which deliver your review feedback directly into the agent's context the moment you submit — no polling needed. Start Claude Code with the channel flag to enable this:
 
     ```bash
-    claude --dangerously-load-development-channels plugin:monocle@monocle
+    claude --dangerously-load-development-channels server:monocle
     ```
 
     <Note>
@@ -122,14 +122,13 @@ See the [CLI reference](/reference/cli#monocle-register) for a full list of flag
 
     ### Skills
 
-    Download the `skills.tar.gz` archive from the [latest release](https://github.com/josephschmitt/monocle/releases/latest) and extract the skill files into wherever your agent expects its skills:
+    Copy the local `skills/` directory into wherever your agent expects its skills:
 
     ```bash
-    curl -Lo skills.tar.gz https://github.com/josephschmitt/monocle/releases/latest/download/skills.tar.gz
-    tar xzf skills.tar.gz -C /path/to/your/agent/skills/
+    cp -R skills/* /path/to/your/agent/skills/
     ```
 
-    The archive contains `SKILL.md` files that instruct the agent to run `monocle review` CLI commands for sending artifacts, retrieving feedback, and checking review status.
+    The directory contains `SKILL.md` files that instruct the agent to run `monocle review` CLI commands for sending artifacts, retrieving feedback, and checking review status.
   </Tab>
 </Tabs>
 
