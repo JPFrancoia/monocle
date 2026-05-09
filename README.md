@@ -317,7 +317,7 @@ Set `MONOCLE_WAKATIME_ENABLED=1` when launching Monocle to send review-time hear
 MONOCLE_WAKATIME_ENABLED=1 monocle
 ```
 
-Monocle does not read `.wakatime.cfg` directly. `wakatime-cli` handles your WakaTime or Wakapi setup, offline queueing, and API URL routing. Review activity is reported with the `code reviewing` category, rate-limited to one heartbeat every two minutes while the TUI is recently active.
+Monocle does not read `.wakatime.cfg` directly. `wakatime-cli` handles your WakaTime or Wakapi setup, offline queueing, and API URL routing. Review activity is reported with the `code reviewing` category and the `Monocle` editor, rate-limited to one heartbeat every two minutes while the TUI is recently active. Monocle disables `wakatime-cli`'s own heartbeat limiter for these already-limited review events.
 
 ### Custom Keybindings
 

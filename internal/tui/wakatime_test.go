@@ -86,6 +86,8 @@ func TestHandleSidebarSelectReportsWakaTimeActivity(t *testing.T) {
 		"--entity", "/repo/internal/app.go",
 		"--entity-type", "file",
 		"--category", "code reviewing",
+		"--heartbeat-rate-limit-seconds", "0",
+		"--sync-ai-disabled",
 		"--plugin", "monocle/test",
 		"--project-folder", "/repo",
 	}

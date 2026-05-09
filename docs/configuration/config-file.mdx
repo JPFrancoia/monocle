@@ -78,4 +78,4 @@ WakaTime-compatible review tracking is controlled by an environment variable, no
 MONOCLE_WAKATIME_ENABLED=1 monocle
 ```
 
-monocle invokes `wakatime-cli` and lets it use your existing WakaTime or Wakapi setup. Review activity is reported as `code reviewing` while the TUI is recently active.
+monocle invokes `wakatime-cli` and lets it use your existing WakaTime or Wakapi setup. Review activity is reported as `code reviewing` under the `Monocle` editor while the TUI is recently active. monocle handles review heartbeat rate limiting itself and disables the CLI's own limiter for those events.

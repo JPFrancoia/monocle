@@ -59,6 +59,15 @@ func TestEnabledFromEnv(t *testing.T) {
 	}
 }
 
+func TestPluginNameUsesWakatimeSuffix(t *testing.T) {
+	if got := PluginName("test"); got != "monocle-wakatime/test" {
+		t.Fatalf("PluginName() = %q, want %q", got, "monocle-wakatime/test")
+	}
+	if got := PluginName(""); got != "monocle-wakatime/dev" {
+		t.Fatalf("PluginName() empty = %q, want %q", got, "monocle-wakatime/dev")
+	}
+}
+
 func TestActivityBuildsCLIArgs(t *testing.T) {
 	now := time.Date(2026, 5, 9, 12, 0, 0, 0, time.UTC)
 	runner := &fakeRunner{}
@@ -77,6 +86,8 @@ func TestActivityBuildsCLIArgs(t *testing.T) {
 		"--entity", "/repo/file.go",
 		"--entity-type", "file",
 		"--category", "code reviewing",
+		"--heartbeat-rate-limit-seconds", "0",
+		"--sync-ai-disabled",
 		"--plugin", "monocle/test",
 		"--project-folder", "/repo",
 	}

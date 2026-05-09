@@ -99,7 +99,7 @@ func PluginName(version string) string {
 	if version == "" {
 		version = "dev"
 	}
-	return "monocle/" + version
+	return "monocle-wakatime/" + version
 }
 
 // NewFromEnv constructs a tracker when MONOCLE_WAKATIME_ENABLED is truthy.
@@ -212,6 +212,8 @@ func (t *Tracker) args(target Target) []string {
 		"--entity", target.Entity,
 		"--entity-type", target.EntityType,
 		"--category", CategoryCodeReviewing,
+		"--heartbeat-rate-limit-seconds", "0",
+		"--sync-ai-disabled",
 		"--plugin", t.plugin,
 	}
 	if t.projectFolder != "" {
