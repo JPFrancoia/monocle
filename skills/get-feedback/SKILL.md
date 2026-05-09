@@ -16,4 +16,6 @@ Run `monocle review get-feedback` to retrieve pending review feedback.
 
 After receiving feedback, address the reviewer's comments in your code, then continue with your work.
 
-If the command fails with a message that Monocle is not running, let the user know they need to start Monocle with `monocle` in the same directory as the project.
+If Monocle reports multiple running sessions, ask the user which listed repo to use. After they choose, rerun the command with `-C <chosen repo>`.
+
+If the command fails with a message that Monocle is not running, let the user know they need to start Monocle with `monocle` for the repo they want reviewed, or rerun with `-C <repo>` if Monocle is already running elsewhere.

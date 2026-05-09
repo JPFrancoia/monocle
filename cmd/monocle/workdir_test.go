@@ -104,6 +104,7 @@ func TestResolveSocketForWorkDir_SocketOverrideTakesPrecedence(t *testing.T) {
 }
 
 func TestResolveSocketForWorkDir_WorkdirDerived(t *testing.T) {
+	t.Setenv("MONOCLE_SOCKET", "")
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".git"), 0755)
 
@@ -118,6 +119,7 @@ func TestResolveSocketForWorkDir_WorkdirDerived(t *testing.T) {
 }
 
 func TestResolveSocketForWorkDir_WorkdirSubdir(t *testing.T) {
+	t.Setenv("MONOCLE_SOCKET", "")
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".git"), 0755)
 	sub := filepath.Join(dir, "src")
@@ -135,6 +137,7 @@ func TestResolveSocketForWorkDir_WorkdirSubdir(t *testing.T) {
 }
 
 func TestResolveSocketForWorkDir_FallsThroughToCWD(t *testing.T) {
+	t.Setenv("MONOCLE_SOCKET", "")
 	got, err := resolveSocketForWorkDir("", "")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -148,6 +151,7 @@ func TestResolveSocketForWorkDir_FallsThroughToCWD(t *testing.T) {
 }
 
 func TestResolveSocketForWorkDir_NonexistentWorkdir(t *testing.T) {
+	t.Setenv("MONOCLE_SOCKET", "")
 	_, err := resolveSocketForWorkDir("", "/nonexistent/path/that/does/not/exist")
 	if err == nil {
 		t.Fatal("expected error for nonexistent workdir, got nil")
@@ -158,6 +162,7 @@ func TestResolveSocketForWorkDir_NonexistentWorkdir(t *testing.T) {
 }
 
 func TestResolveSocketForWorkDir_FileNotDir(t *testing.T) {
+	t.Setenv("MONOCLE_SOCKET", "")
 	f := filepath.Join(t.TempDir(), "afile")
 	os.WriteFile(f, []byte("hello"), 0644)
 
@@ -171,6 +176,7 @@ func TestResolveSocketForWorkDir_FileNotDir(t *testing.T) {
 }
 
 func TestResolveSocketForWorkDir_DeterministicForSameDir(t *testing.T) {
+	t.Setenv("MONOCLE_SOCKET", "")
 	dir := t.TempDir()
 	os.MkdirAll(filepath.Join(dir, ".git"), 0755)
 

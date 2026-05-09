@@ -10,7 +10,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/josephschmitt/monocle/internal/adapters"
 	"github.com/josephschmitt/monocle/internal/protocol"
 )
 
@@ -43,9 +42,9 @@ func Connect(socketPath string) (*Client, error) {
 // ConnectDefault resolves the socket path from the current working directory
 // and connects. Respects the MONOCLE_SOCKET environment variable.
 func ConnectDefault() (*Client, error) {
-	socketPath := adapters.ResolveSocketPath()
-	if socketPath == "" {
-		return nil, fmt.Errorf("get cwd: unable to resolve socket path")
+	socketPath, err := ResolveSocketPath("", "")
+	if err != nil {
+		return nil, err
 	}
 	return Connect(socketPath)
 }

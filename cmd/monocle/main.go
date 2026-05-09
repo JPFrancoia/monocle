@@ -642,23 +642,11 @@ func resolveRepoRoot(workdir string) (repoRoot string, nonGitMode bool, err erro
 	return repoRoot, nonGitMode, nil
 }
 
-// resolveSocketForWorkDir computes the socket path considering --socket and --workdir.
-// Precedence: explicit socket > workdir-derived > CWD-derived.
+// resolveSocketForWorkDir computes the socket path for review commands. The
+// client resolver preserves explicit overrides and can discover a unique
+// running nested repo when the agent starts from a non-git parent workspace.
 func resolveSocketForWorkDir(socketOverride, workdir string) (string, error) {
-	if socketOverride != "" {
-		return socketOverride, nil
-	}
-	if workdir != "" {
-		info, err := os.Stat(workdir)
-		if err != nil {
-			return "", fmt.Errorf("--workdir: %w", err)
-		}
-		if !info.IsDir() {
-			return "", fmt.Errorf("--workdir: %s is not a directory", workdir)
-		}
-		return adapters.DefaultSocketPath(adapters.FindRepoRoot(workdir)), nil
-	}
-	return adapters.ResolveSocketPath(), nil
+	return client.ResolveSocketPath(socketOverride, workdir)
 }
 
 func startNewSession(engine core.EngineAPI, repoRoot string) error {

@@ -10,7 +10,7 @@ When registered in **MCP tools mode**, agents call these operations as MCP tools
 When registered in **skills mode**, agents invoke the corresponding CLI commands below.
 
 <Note>
-  When the agent's working directory differs from monocle's, use `--workdir` (`-C`) to point commands at the correct repository. Alternatively, set `MONOCLE_SOCKET` or `MONOCLE_WORKDIR` to achieve the same effect via environment variables. Without one of these, commands look for a socket based on the current directory and may not find a running session. Press `I` in the monocle TUI to see the active socket path.
+  Agent commands first try the socket for the current directory. If the agent is in a non-git parent folder and exactly one running monocle session exists in a nested repo, commands use that nested session automatically. If several nested sessions match, the command lists them and asks you to rerun with `--workdir` (`-C`) for the repo you want. You can also set `MONOCLE_SOCKET` or `MONOCLE_WORKDIR`. Press `I` in the monocle TUI to see the active socket path.
 </Note>
 
 ---

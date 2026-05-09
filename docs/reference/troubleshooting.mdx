@@ -6,9 +6,15 @@ description: "Solutions for common monocle issues."
 <AccordionGroup>
 
   <Accordion title="Agent not connecting / socket mismatch">
-    Monocle creates a Unix socket based on its working directory. If your agent runs in a different directory, it looks for a socket in the wrong place and cannot connect.
+    monocle creates a Unix socket based on its working directory. Agent commands first try the socket for their current directory. If the agent runs from a non-git parent folder and exactly one running monocle session exists in a nested repo, monocle finds it automatically.
 
     **To diagnose:** Press `I` inside monocle to see the active socket path and how many subscribers are connected.
+
+    **If multiple nested sessions are running:** The command lists candidate repos. Choose one and rerun with `-C`:
+
+    ```bash
+    monocle review status -C /path/to/repo
+    ```
 
     **Solution: set `MONOCLE_SOCKET`**
 
@@ -71,7 +77,7 @@ description: "Solutions for common monocle issues."
   <Accordion title="No feedback delivered to the agent">
     <Steps>
       <Step title="Confirm monocle is running in the right directory">
-        Monocle must be running in the same Git repository as your agent. Check the title bar or press `I` to see the working directory monocle is using.
+        monocle must be running for the Git repository you want reviewed. Agent commands can discover a unique nested running repo from a parent workspace, but they will ask you to choose if several nested repos are running. Check the title bar or press `I` to see the working directory monocle is using.
       </Step>
       <Step title="Verify the connection">
         Run this from the agent's working directory:

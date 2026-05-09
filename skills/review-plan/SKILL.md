@@ -23,4 +23,6 @@ Submits a plan file to Monocle so the reviewer can see it. Does NOT wait for fee
 
 4. **Confirm** to the user that the plan was sent to Monocle.
 
-If any command fails with a message that Monocle is not running, let the user know they need to start Monocle with `monocle` in the same directory as the project.
+If Monocle reports multiple running sessions, ask the user which listed repo to use. After they choose, rerun the command with `-C <chosen repo>`.
+
+If any command fails with a message that Monocle is not running, let the user know they need to start Monocle with `monocle` for the repo they want reviewed, or rerun with `-C <repo>` if Monocle is already running elsewhere.

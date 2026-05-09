@@ -236,7 +236,15 @@ monocle review add-files <paths...> [--json]             Add files to review ses
 
 ### Manual Socket Override
 
-If auto-pairing fails (e.g., the agent's working directory differs from Monocle's), you can manually specify the socket path:
+Agent commands first look for the session matching their current directory. If the agent is running from a non-git parent folder and exactly one running Monocle session exists in a nested repo, commands connect to that nested session automatically.
+
+If multiple nested sessions are running, the command lists the candidate repos. Ask the agent to rerun with the repo you want:
+
+```bash
+monocle review get-feedback -C /path/to/repo
+```
+
+You can also manually specify the socket path:
 
 - **Monocle:** `monocle --socket /tmp/monocle-abc123.sock`
 - **Agent commands:** `MONOCLE_SOCKET=/tmp/monocle-abc123.sock monocle review status`

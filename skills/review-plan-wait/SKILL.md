@@ -27,4 +27,6 @@ Submits a plan file to Monocle and blocks until the reviewer responds with feedb
    - If the reviewer provided feedback requesting changes, share the feedback with the user and act on it — update the plan, then run `monocle review send-artifact --wait` again
    - Keep iterating until the reviewer approves
 
-If any command fails with a message that Monocle is not running, let the user know they need to start Monocle with `monocle` in the same directory as the project.
+If Monocle reports multiple running sessions, ask the user which listed repo to use. After they choose, rerun the command with `-C <chosen repo>`.
+
+If any command fails with a message that Monocle is not running, let the user know they need to start Monocle with `monocle` for the repo they want reviewed, or rerun with `-C <repo>` if Monocle is already running elsewhere.

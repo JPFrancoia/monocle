@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/josephschmitt/monocle/internal/adapters"
+	"github.com/josephschmitt/monocle/internal/client"
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -103,15 +103,19 @@ func resolveSocketFromRoots(ctx context.Context, session *sdkmcp.ServerSession) 
 		return
 	}
 
+	var roots []string
 	for _, root := range res.Roots {
 		parsed, err := url.Parse(root.URI)
 		if err != nil || parsed.Scheme != "file" {
 			continue
 		}
-		repoRoot := adapters.FindRepoRoot(parsed.Path)
-		os.Setenv("MONOCLE_SOCKET", adapters.DefaultSocketPath(repoRoot))
+		roots = append(roots, parsed.Path)
+	}
+	socketPath, err := client.ResolveSocketPathFromRoots("", roots)
+	if err != nil || socketPath == "" || !client.IsSocketReachable(socketPath) {
 		return
 	}
+	os.Setenv("MONOCLE_SOCKET", socketPath)
 }
 
 // capturingTransport wraps a Transport to capture the Connection for sending

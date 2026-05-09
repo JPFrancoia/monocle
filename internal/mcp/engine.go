@@ -8,7 +8,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/josephschmitt/monocle/internal/adapters"
+	"github.com/josephschmitt/monocle/internal/client"
 	"github.com/josephschmitt/monocle/internal/protocol"
 	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,15 +30,17 @@ func newEngineConn(conn mcp.Connection, channelsOnly bool) *engineConn {
 // run connects to the engine and listens for events, forwarding them as
 // channel notifications. It reconnects with backoff on connection loss.
 func (e *engineConn) run(ctx context.Context) {
-	socketPath := adapters.ResolveSocketPath()
-	if socketPath == "" {
-		return
-	}
-
 	const initialDelay = 2 * time.Second
 	delay := initialDelay
 	for {
-		err := e.connectAndListen(ctx, socketPath)
+		socketPath, err := client.ResolveSocketPath("", "")
+		if err != nil {
+			return
+		}
+		if socketPath == "" {
+			return
+		}
+		err = e.connectAndListen(ctx, socketPath)
 		if ctx.Err() != nil {
 			return
 		}
