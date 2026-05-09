@@ -11,3 +11,4 @@ test/
 scripts/
 .claude/worktrees/
 internal/adapters/channel.bundle.js
+plans/

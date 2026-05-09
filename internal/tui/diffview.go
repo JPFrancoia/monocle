@@ -50,19 +50,19 @@ type diffViewLine struct {
 }
 
 type diffViewModel struct {
-	path      string
-	hunks     []types.DiffHunk
-	comments  []types.ReviewComment
-	lines     []diffViewLine
-	cursor    int
-	offset    int // scroll offset
-	width     int
-	height    int
-	focused   bool
-	style     diffStyle
-	theme     *Theme
-	hl        *highlighter
-	isBinary  bool // true when hunk content contains binary control characters
+	path     string
+	hunks    []types.DiffHunk
+	comments []types.ReviewComment
+	lines    []diffViewLine
+	cursor   int
+	offset   int // scroll offset
+	width    int
+	height   int
+	focused  bool
+	style    diffStyle
+	theme    *Theme
+	hl       *highlighter
+	isBinary bool // true when hunk content contains binary control characters
 
 	hOffset int  // horizontal scroll offset (runes)
 	wrap    bool // soft-wrap long lines
@@ -76,20 +76,20 @@ type diffViewModel struct {
 	mouseDragActive bool
 
 	// Comment expansion on hover
-	expandedCommentID string        // ID of the currently expanded comment (empty = none)
-	expandSeq         int           // sequence counter; incremented on each cursor move to debounce
+	expandedCommentID  string        // ID of the currently expanded comment (empty = none)
+	expandSeq          int           // sequence counter; incremented on each cursor move to debounce
 	commentExpandDelay time.Duration // <0 = disabled, 0 = instant, >0 = delay before auto-expand
 
 	// Content view mode (for plans/docs)
-	contentMode        bool
-	contentID          string
-	contentTitle       string
-	contentHasDiff      bool // true when multiple versions exist for diffing
-	contentVersionCount int  // number of versions for this content item
-	diffBaseVersion     int  // base version being diffed from (0 = default latest-vs-previous)
-	diffToVersion       int  // target version being diffed to
-	contentDiffContent string // current content text, for toggling back from diff view
-	mdStyler           *markdownStyler
+	contentMode         bool
+	contentID           string
+	contentTitle        string
+	contentHasDiff      bool   // true when multiple versions exist for diffing
+	contentVersionCount int    // number of versions for this content item
+	diffBaseVersion     int    // base version being diffed from (0 = default latest-vs-previous)
+	diffToVersion       int    // target version being diffed to
+	contentDiffContent  string // current content text, for toggling back from diff view
+	mdStyler            *markdownStyler
 
 	// Content diff auto-switch (from config diff_style)
 	preferredContentDiffStyle diffStyle // unified or split
@@ -2020,8 +2020,8 @@ func (m diffViewModel) isSelectable(idx int) bool {
 	if line.isComment {
 		return true
 	}
-	// Skip removed lines — they have no new-file line number and can't be commented on
-	if line.kind == types.DiffLineRemoved && line.newLineNum == 0 {
+	// Skip pure removed lines — comments target lines in the current working tree.
+	if line.kind == types.DiffLineRemoved && m.lineNumAt(idx) == 0 {
 		return false
 	}
 	return true
@@ -2093,7 +2093,10 @@ func (m diffViewModel) lineNumAt(idx int) int {
 	line := m.lines[idx]
 	// Only return new-file line numbers — comments reference lines that
 	// exist in the current working tree so the agent can act on them.
-	return line.newLineNum
+	if line.newLineNum > 0 {
+		return line.newLineNum
+	}
+	return line.rightLineNum
 }
 
 func (m diffViewModel) currentDiffLine() int {
@@ -2198,7 +2201,7 @@ type openCommentMsg struct {
 	lineStart   int
 	lineEnd     int
 	targetType  types.TargetType
-	prefillBody string           // pre-filled body text (for suggestions)
+	prefillBody string            // pre-filled body text (for suggestions)
 	prefillType types.CommentType // pre-set comment type (zero value = default)
 }
 
@@ -2496,4 +2499,3 @@ func formatExpandedComment(c *types.ReviewComment, width int, originalCode strin
 	lines = append(lines, fmt.Sprintf("  ╚═══%s", strings.Repeat("═", footerDashes)))
 	return strings.Join(lines, "\n")
 }
-

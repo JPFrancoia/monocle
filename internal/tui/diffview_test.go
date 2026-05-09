@@ -456,6 +456,83 @@ func TestOriginalCodeForComment(t *testing.T) {
 	}
 }
 
+func TestCurrentDiffLineSplitRows(t *testing.T) {
+	tests := []struct {
+		name           string
+		line           diffViewLine
+		wantLine       int
+		wantSelectable bool
+	}{
+		{
+			name: "added-only split row uses right line number",
+			line: diffViewLine{
+				isSplit:      true,
+				leftEmpty:    true,
+				kind:         types.DiffLineContext,
+				rightKind:    types.DiffLineAdded,
+				rightLineNum: 42,
+				rightContent: "new line",
+			},
+			wantLine:       42,
+			wantSelectable: true,
+		},
+		{
+			name: "paired split row uses right line number",
+			line: diffViewLine{
+				isSplit:      true,
+				kind:         types.DiffLineRemoved,
+				oldLineNum:   10,
+				content:      "old line",
+				rightKind:    types.DiffLineAdded,
+				rightLineNum: 11,
+				rightContent: "new line",
+			},
+			wantLine:       11,
+			wantSelectable: true,
+		},
+		{
+			name: "pure removed split row has no commentable line",
+			line: diffViewLine{
+				isSplit:    true,
+				kind:       types.DiffLineRemoved,
+				oldLineNum: 10,
+				content:    "removed line",
+				rightKind:  types.DiffLineContext,
+				rightEmpty: true,
+			},
+			wantLine:       0,
+			wantSelectable: false,
+		},
+		{
+			name: "unified row keeps new line number",
+			line: diffViewLine{
+				kind:         types.DiffLineAdded,
+				newLineNum:   7,
+				rightLineNum: 99,
+				content:      "unified line",
+			},
+			wantLine:       7,
+			wantSelectable: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := diffViewModel{
+				lines:  []diffViewLine{tt.line},
+				cursor: 0,
+			}
+
+			if got := m.currentDiffLine(); got != tt.wantLine {
+				t.Errorf("currentDiffLine() = %d, want %d", got, tt.wantLine)
+			}
+			if got := m.isSelectable(0); got != tt.wantSelectable {
+				t.Errorf("isSelectable(0) = %v, want %v", got, tt.wantSelectable)
+			}
+		})
+	}
+}
+
 func TestRenderContentLineWrapModeMarkdown(t *testing.T) {
 	theme := DefaultTheme()
 	m := diffViewModel{
