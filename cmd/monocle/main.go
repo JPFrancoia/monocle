@@ -712,10 +712,9 @@ func runTUI(socketOverride string, workdir string, additionalPaths []string, con
 	}
 
 	// Auto-spawn `monocle serve` for this repo if none is running, then
-	// connect as a thin client. The engine (SQLite, session, feedback
-	// queue, socket server) all live in the serve process; the TUI holds
-	// no engine state.
-	socketPath, _, err := adapters.EnsureServe(adapters.AutoSpawnOptions{
+	// connect as a thin client. If this TUI created the serve process, it
+	// owns that process and stops it when the TUI exits.
+	socketPath, spawned, err := adapters.EnsureServe(adapters.AutoSpawnOptions{
 		RepoRoot: repoRoot,
 		Socket:   socketOverride,
 	})
@@ -725,9 +724,19 @@ func runTUI(socketOverride string, workdir string, additionalPaths []string, con
 
 	engine, err := client.NewEngineClient(socketPath)
 	if err != nil {
+		if spawned {
+			_, _ = stopServeBySocket(socketPath, defaultStopTimeout)
+		}
 		return fmt.Errorf("connect engine: %w", err)
 	}
-	defer engine.Close()
+	defer func() {
+		_ = engine.Close()
+		if spawned {
+			if _, err := stopServeBySocket(socketPath, defaultStopTimeout); err != nil {
+				fmt.Fprintf(os.Stderr, "Warning: could not stop auto-spawned monocle serve: %v\n", err)
+			}
+		}
+	}()
 
 	// Session selection. monocle serve defaults to "continue latest or
 	// start new", so the zero-flag case needs no client-side action.
@@ -777,7 +786,5 @@ func runTUI(socketOverride string, workdir string, additionalPaths []string, con
 	if _, err := p.Run(); err != nil {
 		return fmt.Errorf("run tui: %w", err)
 	}
-	// Note: don't call engine.Shutdown() — serve owns its own lifecycle
-	// (idle timeout, PID file) and other clients may still be attached.
 	return nil
 }

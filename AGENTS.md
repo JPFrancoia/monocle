@@ -16,7 +16,7 @@ Local CLI/TUI review companion for AI coding agents. Everything is local: Unix s
 ## Runtime Architecture
 
 - `cmd/monocle` is one binary: TUI, headless `serve`, agent-facing `review` commands, registration, hooks, and hidden MCP server.
-- `monocle` is a thin TUI client. It auto-spawns or attaches to detached `monocle serve`, which owns the engine, SQLite DB, sessions, feedback queue, and Unix socket.
+- `monocle` is a thin TUI client. It auto-spawns an owned `monocle serve` or attaches to a manually-started one; `serve` owns the engine, SQLite DB, sessions, feedback queue, and Unix socket.
 - Socket pairing is repo-root based: default `/tmp/monocle-<12-char-sha>.sock`; override with `MONOCLE_SOCKET` or `--socket`, and use `-C/--workdir` when the agent/TUI working dirs differ.
 - `core.EngineAPI` (`internal/core/engine.go`) is the TUI boundary; keep TUI code against that interface. Socket-backed clients live in `internal/client`.
 - SQLite defaults to `$XDG_DATA_HOME/monocle/monocle.db` or `~/.local/share/monocle/monocle.db`; `MONOCLE_DB` overrides it.

@@ -14,6 +14,7 @@ import (
 	"github.com/josephschmitt/monocle/internal/adapters"
 	"github.com/josephschmitt/monocle/internal/core"
 	"github.com/josephschmitt/monocle/internal/db"
+	"github.com/josephschmitt/monocle/internal/types"
 )
 
 // ServeCmd runs a headless engine + socket server. Frontends (TUI, Desktop,
@@ -22,7 +23,7 @@ import (
 type ServeCmd struct {
 	WorkDirFlag
 	Socket      string        `help:"Override socket path" env:"MONOCLE_SOCKET" default:""`
-	IdleTimeout time.Duration `help:"Exit after this idle interval past the 60s grace window (0 disables)" name:"idle-timeout"`
+	IdleTimeout time.Duration `help:"Exit after this idle interval past the 60s grace window (disabled by default; negative disables configured idle shutdown)" name:"idle-timeout"`
 }
 
 // StopCmd sends SIGTERM to a running `monocle serve` process for the target
@@ -32,6 +33,8 @@ type StopCmd struct {
 	Socket  string        `help:"Override socket path" env:"MONOCLE_SOCKET" default:""`
 	Timeout time.Duration `help:"Maximum time to wait for the server to exit" default:"5s"`
 }
+
+const defaultStopTimeout = 5 * time.Second
 
 // pidFilePath returns the PID file path that pairs with a given socket path.
 // The socket at /tmp/monocle-<hash>.sock pairs with /tmp/monocle-<hash>.pid.
@@ -98,18 +101,7 @@ func (c *ServeCmd) Run() error {
 		return fmt.Errorf("create engine: %w", err)
 	}
 
-	// Resolve idle timeout precedence: explicit flag > config file > default.
-	// A negative flag value disables idle shutdown entirely.
-	idle := core.DefaultIdleTimeout
-	if cfg.IdleTimeout != 0 {
-		idle = time.Duration(cfg.IdleTimeout)
-	}
-	if c.IdleTimeout != 0 {
-		idle = c.IdleTimeout
-	}
-	if idle > 0 {
-		engine.SetIdleTimeout(idle)
-	}
+	engine.SetIdleTimeout(resolveServeIdleTimeout(cfg, c.IdleTimeout))
 
 	// Resolve an initial session the same way runTUI does today: continue
 	// the latest session if any, otherwise start fresh. `monocle serve`
@@ -158,38 +150,64 @@ func (c *StopCmd) Run() error {
 	if err != nil {
 		return err
 	}
+
+	stopped, err := stopServeBySocket(socketPath, c.Timeout)
+	if err != nil {
+		return err
+	}
+	if !stopped {
+		fmt.Fprintln(os.Stderr, "monocle stop: no server running")
+	}
+	return nil
+}
+
+func stopServeBySocket(socketPath string, timeout time.Duration) (bool, error) {
+	if timeout <= 0 {
+		timeout = defaultStopTimeout
+	}
 	pidPath := pidFilePath(socketPath)
 
 	pid, err := readPIDFile(pidPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			fmt.Fprintln(os.Stderr, "monocle stop: no server running")
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
 	}
 
 	proc, err := os.FindProcess(pid)
 	if err != nil {
-		return fmt.Errorf("find process %d: %w", pid, err)
+		return true, fmt.Errorf("find process %d: %w", pid, err)
 	}
 	if err := proc.Signal(syscall.SIGTERM); err != nil {
 		if errors.Is(err, os.ErrProcessDone) || strings.Contains(err.Error(), "process already finished") {
 			removePIDFile(pidPath)
-			return nil
+			return true, nil
 		}
-		return fmt.Errorf("signal %d: %w", pid, err)
+		return true, fmt.Errorf("signal %d: %w", pid, err)
 	}
 
 	// Poll until the PID file disappears (serve removes it on exit) or we
 	// exceed the caller's timeout.
-	deadline := time.Now().Add(c.Timeout)
+	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if _, err := os.Stat(pidPath); errors.Is(err, os.ErrNotExist) {
-			return nil
+			return true, nil
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	return fmt.Errorf("timed out waiting for monocle serve (pid %d) to exit", pid)
+	return true, fmt.Errorf("timed out waiting for monocle serve (pid %d) to exit", pid)
 }
 
+func resolveServeIdleTimeout(cfg *types.Config, flag time.Duration) time.Duration {
+	// Precedence: explicit flag > config file > disabled. Manual serves stay
+	// up until stopped unless the user opts into idle exit.
+	var idle time.Duration
+	if cfg != nil && cfg.IdleTimeout != 0 {
+		idle = time.Duration(cfg.IdleTimeout)
+	}
+	if flag != 0 {
+		idle = flag
+	}
+	return idle
+}

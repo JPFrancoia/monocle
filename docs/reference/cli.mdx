@@ -161,13 +161,13 @@ Error-handling philosophy: these hooks degrade gracefully. If stdin is malformed
 
 ## `monocle serve`
 
-Run a headless monocle engine for the current repository. This process owns the socket, the SQLite database, and the review session; the `monocle` TUI, Desktop app, and future frontends connect as thin clients over the socket.
+Run a headless monocle engine for the current repository. This process owns the socket, the SQLite database, and the review session; the `monocle` TUI and agent commands connect as thin clients over the socket.
 
 ```bash
 monocle serve [--workdir PATH] [--socket PATH] [--idle-timeout DURATION]
 ```
 
-You don't normally run `monocle serve` yourself — launching `monocle` auto-spawns one in the background for the current repo if none is running. Run it manually when you want the engine up without a UI (for example, to accept `monocle review ...` calls from agents before the TUI starts), or to inspect the engine from multiple frontends at once.
+You don't normally run `monocle serve` yourself. Launching `monocle` auto-spawns one for the current repo if none is running, and the TUI stops that owned server when it exits. Run `monocle serve` manually when you want the engine up without a UI, or when you want it to keep running after the TUI exits.
 
 ### Flags
 
@@ -175,11 +175,11 @@ You don't normally run `monocle serve` yourself — launching `monocle` auto-spa
 |------|-------|-------------|
 | `--workdir PATH` | `-C` | Override the working directory; serve attaches to the repo at this path. Also reads from `MONOCLE_WORKDIR`. |
 | `--socket PATH` | | Override the Unix socket path. Also reads from `MONOCLE_SOCKET`. |
-| `--idle-timeout DURATION` | | Exit after this idle interval past the 60s grace window (for example, `30m`, `1h`). Defaults to 30 minutes. Use `0` via `config.json` to disable. |
+| `--idle-timeout DURATION` | | Exit after this idle interval past the 60s grace window (for example, `30m`, `1h`). Disabled by default; use a positive duration to opt in or a negative duration to disable a configured timeout. |
 
 ### Idle shutdown
 
-`monocle serve` exits automatically when every connected client has been gone for 60 seconds plus `--idle-timeout`. A TUI the user leaves idle still holds a socket open, so only a genuinely-abandoned serve exits. If the serve has already idled out when the user next runs `monocle`, autospawn brings up a fresh one — there's nothing to clean up by hand.
+An auto-spawned `monocle serve` is owned by the TUI that created it and stops when that TUI exits. A manually started `monocle serve` keeps running until you run `monocle stop` or send it a signal. If you set `--idle-timeout` or `idle_timeout`, the manual server exits after every connected client has been gone for 60 seconds plus that duration.
 
 ---
 

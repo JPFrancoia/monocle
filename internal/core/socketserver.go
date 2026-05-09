@@ -11,11 +11,6 @@ import (
 	"github.com/josephschmitt/monocle/internal/protocol"
 )
 
-// DefaultIdleTimeout is how long monocle serve stays running past the 60s
-// grace window after the last client disconnects. Zero disables idle
-// shutdown (the serve runs until SIGINT/SIGTERM).
-const DefaultIdleTimeout = 30 * time.Minute
-
 // IdleGracePeriod is the fixed delay between "last client disconnected"
 // and "start the idle countdown". Prevents thrashing when a user Ctrl-Cs
 // a frontend and re-runs it within a few seconds.

@@ -6,26 +6,26 @@ import (
 )
 
 type Config struct {
-	IgnorePatterns []string          `json:"ignore_patterns"`
-	Keybindings    map[string]string `json:"keybindings"`
-	DiffStyle      string            `json:"diff_style"`
-	SidebarStyle   string            `json:"sidebar_style"`
-	Layout         string            `json:"layout"`
-	Wrap           bool              `json:"wrap"`
-	TabSize        int               `json:"tab_size"`
-	ContextLines   int               `json:"context_lines"`
-	ReviewFormat      ReviewFormatConfig `json:"review_format"`
-	AutoFocusMode     bool               `json:"auto_focus_mode"`
-	Mouse              *bool `json:"mouse"`
-	MinDiffWidth       int   `json:"min_diff_width"`
-	CommentExpand         *bool  `json:"comment_expand"`
-	CommentExpandDelay    int    `json:"comment_expand_delay"`
-	MarkReviewedOnSubmit  string `json:"mark_reviewed_on_submit"` // "all" (default), "commented", "manual"
-	ReviewTracking        bool   `json:"review_tracking"`         // enable reviewed state, snapshots, change detection (default: true)
+	IgnorePatterns       []string           `json:"ignore_patterns"`
+	Keybindings          map[string]string  `json:"keybindings"`
+	DiffStyle            string             `json:"diff_style"`
+	SidebarStyle         string             `json:"sidebar_style"`
+	Layout               string             `json:"layout"`
+	Wrap                 bool               `json:"wrap"`
+	TabSize              int                `json:"tab_size"`
+	ContextLines         int                `json:"context_lines"`
+	ReviewFormat         ReviewFormatConfig `json:"review_format"`
+	AutoFocusMode        bool               `json:"auto_focus_mode"`
+	Mouse                *bool              `json:"mouse"`
+	MinDiffWidth         int                `json:"min_diff_width"`
+	CommentExpand        *bool              `json:"comment_expand"`
+	CommentExpandDelay   int                `json:"comment_expand_delay"`
+	MarkReviewedOnSubmit string             `json:"mark_reviewed_on_submit"` // "all" (default), "commented", "manual"
+	ReviewTracking       bool               `json:"review_tracking"`         // enable reviewed state, snapshots, change detection (default: true)
 	// IdleTimeout controls how long `monocle serve` stays running after the
-	// last client disconnects (minus a 60s grace window). Serialised as a
-	// Go duration string (e.g. "30m", "1h"); an empty/zero value uses the
-	// default 30 min, and a negative value disables idle shutdown.
+	// last client disconnects (plus a 60s grace window). Serialised as a Go
+	// duration string (e.g. "30m", "1h"); empty, zero, or negative values
+	// disable idle shutdown.
 	IdleTimeout Duration `json:"idle_timeout,omitempty"`
 }
 

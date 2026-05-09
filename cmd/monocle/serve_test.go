@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/kong"
+	"github.com/josephschmitt/monocle/internal/types"
 )
 
 // TestCLIParsesWithoutIdleTimeoutFlag guards against a regression where
@@ -61,5 +63,61 @@ func TestWriteReadPIDFile(t *testing.T) {
 	removePIDFile(path)
 	if _, err := os.Stat(path); !os.IsNotExist(err) {
 		t.Errorf("pid file still exists after remove: %v", err)
+	}
+}
+
+func TestStopServeBySocketNoPIDFile(t *testing.T) {
+	socketPath := filepath.Join(t.TempDir(), "missing.sock")
+
+	stopped, err := stopServeBySocket(socketPath, 0)
+	if err != nil {
+		t.Fatalf("stop: %v", err)
+	}
+	if stopped {
+		t.Fatal("expected no server to stop")
+	}
+}
+
+func TestResolveServeIdleTimeout(t *testing.T) {
+	cfgIdle := 30 * time.Minute
+	flagIdle := 5 * time.Minute
+
+	cases := []struct {
+		name string
+		cfg  *types.Config
+		flag time.Duration
+		want time.Duration
+	}{
+		{
+			name: "default disabled",
+			cfg:  &types.Config{},
+			want: 0,
+		},
+		{
+			name: "config enables idle shutdown",
+			cfg:  &types.Config{IdleTimeout: types.Duration(cfgIdle)},
+			want: cfgIdle,
+		},
+		{
+			name: "flag overrides config",
+			cfg:  &types.Config{IdleTimeout: types.Duration(cfgIdle)},
+			flag: flagIdle,
+			want: flagIdle,
+		},
+		{
+			name: "negative flag disables",
+			cfg:  &types.Config{IdleTimeout: types.Duration(cfgIdle)},
+			flag: -1,
+			want: -1,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := resolveServeIdleTimeout(tc.cfg, tc.flag)
+			if got != tc.want {
+				t.Errorf("resolveServeIdleTimeout() = %s, want %s", got, tc.want)
+			}
+		})
 	}
 }

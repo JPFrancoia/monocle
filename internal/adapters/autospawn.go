@@ -39,9 +39,9 @@ type AutoSpawnOptions struct {
 // <repoRoot>` detached, polls for readiness, and returns the socket path
 // once the engine is accepting connections.
 //
-// The child process is placed in a new session (Setsid=true) so it
-// outlives the launching frontend — closing the TUI doesn't kill the
-// engine, and another frontend can attach next time.
+// The child process is placed in a new session (Setsid=true) so terminal
+// teardown does not kill it accidentally. The launching frontend decides
+// whether it owns and stops the spawned process.
 func EnsureServe(opts AutoSpawnOptions) (socketPath string, spawned bool, err error) {
 	socketPath = opts.Socket
 	if socketPath == "" {
