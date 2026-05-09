@@ -48,6 +48,14 @@ func (e *Engine) handleGetSession(_ *protocol.GetSessionMsg) *protocol.GetSessio
 	}
 }
 
+// handleGetRepoInfo returns repository metadata over the socket API.
+func (e *Engine) handleGetRepoInfo(_ *protocol.GetRepoInfoMsg) *protocol.GetRepoInfoResponse {
+	return &protocol.GetRepoInfoResponse{
+		Type: protocol.TypeGetRepoInfoResponse,
+		Info: e.GetRepoInfo(),
+	}
+}
+
 func (e *Engine) handleListSessions(msg *protocol.ListSessionsMsg) *protocol.ListSessionsResponse {
 	sessions, err := e.ListSessions(ListSessionsOptions{
 		RepoRoot: msg.RepoRoot,

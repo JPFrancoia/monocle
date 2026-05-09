@@ -11,6 +11,7 @@ const (
 	TypeStartSession  = "start_session"
 	TypeResumeSession = "resume_session"
 	TypeGetSession    = "get_session"
+	TypeGetRepoInfo   = "get_repo_info"
 	TypeListSessions  = "list_sessions"
 
 	// Files
@@ -54,22 +55,22 @@ const (
 	TypeGetSubmissions   = "get_submissions"
 
 	// Base ref
-	TypeSetBaseRef         = "set_base_ref"
-	TypeSetAutoAdvanceRef  = "set_auto_advance_ref"
-	TypeIsAutoAdvanceRef   = "is_auto_advance_ref"
-	TypeSelectedBaseRef    = "selected_base_ref"
-	TypeRecentCommits      = "recent_commits"
+	TypeSetBaseRef        = "set_base_ref"
+	TypeSetAutoAdvanceRef = "set_auto_advance_ref"
+	TypeIsAutoAdvanceRef  = "is_auto_advance_ref"
+	TypeSelectedBaseRef   = "selected_base_ref"
+	TypeRecentCommits     = "recent_commits"
 
 	// Snapshots
-	TypeGetSnapshots       = "get_snapshots"
-	TypeSetSnapshotBase    = "set_snapshot_base"
-	TypeClearSnapshotBase  = "clear_snapshot_base"
-	TypeGetActiveSnapshot  = "get_active_snapshot"
-	TypeHasSnapshots       = "has_snapshots"
+	TypeGetSnapshots      = "get_snapshots"
+	TypeSetSnapshotBase   = "set_snapshot_base"
+	TypeClearSnapshotBase = "clear_snapshot_base"
+	TypeGetActiveSnapshot = "get_active_snapshot"
+	TypeHasSnapshots      = "has_snapshots"
 
 	// Config
-	TypeGetConfig              = "get_config"
-	TypeSaveConfig             = "save_config"
+	TypeGetConfig               = "get_config"
+	TypeSaveConfig              = "save_config"
 	TypeIsReviewTrackingEnabled = "is_review_tracking_enabled"
 
 	// Status
@@ -86,6 +87,7 @@ const (
 	TypeStartSessionResponse  = "start_session_response"
 	TypeResumeSessionResponse = "resume_session_response"
 	TypeGetSessionResponse    = "get_session_response"
+	TypeGetRepoInfoResponse   = "get_repo_info_response"
 	TypeListSessionsResponse  = "list_sessions_response"
 
 	// Files
@@ -173,9 +175,9 @@ type StartSessionMsg struct {
 }
 
 type StartSessionResponse struct {
-	Type    string                `json:"type"`
-	Session *types.ReviewSession  `json:"session,omitempty"`
-	Error   string                `json:"error,omitempty"`
+	Type    string               `json:"type"`
+	Session *types.ReviewSession `json:"session,omitempty"`
+	Error   string               `json:"error,omitempty"`
 }
 
 type ResumeSessionMsg struct {
@@ -184,9 +186,9 @@ type ResumeSessionMsg struct {
 }
 
 type ResumeSessionResponse struct {
-	Type    string                `json:"type"`
-	Session *types.ReviewSession  `json:"session,omitempty"`
-	Error   string                `json:"error,omitempty"`
+	Type    string               `json:"type"`
+	Session *types.ReviewSession `json:"session,omitempty"`
+	Error   string               `json:"error,omitempty"`
 }
 
 type GetSessionMsg struct {
@@ -194,8 +196,17 @@ type GetSessionMsg struct {
 }
 
 type GetSessionResponse struct {
-	Type    string                `json:"type"`
-	Session *types.ReviewSession  `json:"session,omitempty"`
+	Type    string               `json:"type"`
+	Session *types.ReviewSession `json:"session,omitempty"`
+}
+
+type GetRepoInfoMsg struct {
+	Type string `json:"type"`
+}
+
+type GetRepoInfoResponse struct {
+	Type string         `json:"type"`
+	Info types.RepoInfo `json:"info"`
 }
 
 type ListSessionsMsg struct {

@@ -96,6 +96,7 @@ This means you can review the agent's *thinking* before it writes code — not j
 - **Review gating** — `/review-plan-wait` blocks the agent until you approve the submitted content before it proceeds
 - **Pause flow** — Ask your agent to stop and wait while you review, then release it when ready (requires MCP channel support)
 - **Live diff viewer** — Unified and split (side-by-side) views with syntax highlighting and intra-line diffs
+- **Repo and branch context** — The title bar shows the active repository and branch so you can confirm what you are reviewing
 - **Structured comments** — Tag feedback as issues, suggestions, notes, or praise with line-level or file-level precision
 - **Suggested edits** — Press `s` to propose exact code changes with GitHub-style `suggestion` blocks
 - **Visual selection** — Select line ranges for comments with vim-style visual mode

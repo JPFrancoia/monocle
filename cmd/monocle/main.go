@@ -759,6 +759,7 @@ func runTUI(socketOverride string, workdir string, additionalPaths []string, con
 
 	var appOpts tui.AppOptions
 	appOpts.NonGitMode = nonGitMode
+	appOpts.RepoRoot = repoRoot
 	adapter := &adapters.ClaudeAdapter{}
 	if adapter.Detect() && adapter.NeedsRegister() {
 		appOpts.MCPRegisterFn = func(global bool) error {
@@ -767,7 +768,6 @@ func runTUI(socketOverride string, workdir string, additionalPaths []string, con
 	}
 	if resumePicker {
 		appOpts.ShowSessionPicker = true
-		appOpts.RepoRoot = repoRoot
 	}
 
 	app := tui.NewApp(engine, appOpts)

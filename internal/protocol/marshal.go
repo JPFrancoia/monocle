@@ -69,6 +69,8 @@ func Decode(data []byte) (any, error) {
 		msg = &ResumeSessionMsg{}
 	case TypeGetSession:
 		msg = &GetSessionMsg{}
+	case TypeGetRepoInfo:
+		msg = &GetRepoInfoMsg{}
 	case TypeListSessions:
 		msg = &ListSessionsMsg{}
 	case TypeRefreshChangedFiles:
@@ -171,6 +173,8 @@ func Decode(data []byte) (any, error) {
 		msg = &ResumeSessionResponse{}
 	case TypeGetSessionResponse:
 		msg = &GetSessionResponse{}
+	case TypeGetRepoInfoResponse:
+		msg = &GetRepoInfoResponse{}
 	case TypeListSessionsResponse:
 		msg = &ListSessionsResponse{}
 	case TypeRefreshChangedFilesResponse:

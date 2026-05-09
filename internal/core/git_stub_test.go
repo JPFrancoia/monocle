@@ -10,6 +10,7 @@ import (
 type gitStub struct {
 	repoRoot   string
 	currentRef string
+	branch     string
 	files      []types.ChangedFile
 	diffResult *types.DiffResult
 	commits    []LogEntry
@@ -25,6 +26,11 @@ func (g *gitStub) RepoRoot() string { return g.repoRoot }
 
 func (g *gitStub) CurrentRef() (string, error) {
 	return g.currentRef, nil
+}
+
+// CurrentBranch returns the stubbed branch for tests.
+func (g *gitStub) CurrentBranch() (string, error) {
+	return g.branch, nil
 }
 
 func (g *gitStub) Diff(_ string) ([]types.ChangedFile, error) {

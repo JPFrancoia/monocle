@@ -68,6 +68,13 @@ func TestEngineClient_RoundTrip(t *testing.T) {
 	if sess := ec.GetSession(); sess == nil {
 		t.Error("GetSession returned nil")
 	}
+	info := ec.GetRepoInfo()
+	if info.Root == "" || info.Name == "" {
+		t.Fatalf("GetRepoInfo returned incomplete repo info: %+v", info)
+	}
+	if info.Branch != "" {
+		t.Fatalf("non-git repo should not report a branch: %+v", info)
+	}
 
 	// RefreshChangedFiles — should find the seeded a.go.
 	files, err := ec.RefreshChangedFiles()

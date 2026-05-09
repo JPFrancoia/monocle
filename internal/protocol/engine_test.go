@@ -23,6 +23,8 @@ func TestEngineMessagesRoundTrip(t *testing.T) {
 		{"ResumeSessionResponse", &ResumeSessionResponse{Type: TypeResumeSessionResponse, Session: &types.ReviewSession{ID: "s1"}}},
 		{"GetSession", &GetSessionMsg{Type: TypeGetSession}},
 		{"GetSessionResponse", &GetSessionResponse{Type: TypeGetSessionResponse, Session: &types.ReviewSession{ID: "s1"}}},
+		{"GetRepoInfo", &GetRepoInfoMsg{Type: TypeGetRepoInfo}},
+		{"GetRepoInfoResponse", &GetRepoInfoResponse{Type: TypeGetRepoInfoResponse, Info: types.RepoInfo{Name: "monocle", Branch: "main"}}},
 		{"ListSessions", &ListSessionsMsg{Type: TypeListSessions, Limit: 10}},
 		{"ListSessionsResponse", &ListSessionsResponse{Type: TypeListSessionsResponse, Sessions: []types.SessionSummary{{ID: "s1"}}}},
 

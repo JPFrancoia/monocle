@@ -52,6 +52,13 @@ type ReviewSession struct {
 	UpdatedAt       time.Time
 }
 
+// RepoInfo describes the repository context shown in the TUI title bar.
+type RepoInfo struct {
+	Root   string
+	Name   string
+	Branch string
+}
+
 type ChangedFile struct {
 	Path     string
 	Status   FileChangeStatus
@@ -124,7 +131,7 @@ type DiffLineKind string
 
 const (
 	DiffLineContext DiffLineKind = "context"
-	DiffLineAdded  DiffLineKind = "added"
+	DiffLineAdded   DiffLineKind = "added"
 	DiffLineRemoved DiffLineKind = "removed"
 )
 

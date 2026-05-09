@@ -8,10 +8,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/josephschmitt/monocle/internal/db"
 	"github.com/josephschmitt/monocle/internal/protocol"
 	"github.com/josephschmitt/monocle/internal/types"
-	"github.com/google/uuid"
 )
 
 // Engine implements EngineAPI and coordinates all Monocle subsystems.
@@ -169,6 +169,22 @@ func (e *Engine) GetSession() *types.ReviewSession {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.current
+}
+
+// GetRepoInfo returns repository metadata for UI display.
+func (e *Engine) GetRepoInfo() types.RepoInfo {
+	root := e.git.RepoRoot()
+	info := types.RepoInfo{
+		Root: root,
+		Name: filepath.Base(root),
+	}
+	if root == "" {
+		info.Name = ""
+	}
+	if branch, err := e.git.CurrentBranch(); err == nil {
+		info.Branch = branch
+	}
+	return info
 }
 
 func (e *Engine) ListSessions(opts ListSessionsOptions) ([]types.SessionSummary, error) {

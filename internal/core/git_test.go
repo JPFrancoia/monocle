@@ -165,6 +165,48 @@ func TestGitCurrentRef(t *testing.T) {
 	}
 }
 
+// TestGitCurrentBranch verifies branch name lookup for a checked-out branch.
+func TestGitCurrentBranch(t *testing.T) {
+	dir, _ := setupTestRepo(t)
+	g := NewGitClient(dir)
+
+	branch, err := g.CurrentBranch()
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+	if branch != "main" {
+		t.Errorf("CurrentBranch = %q, want %q", branch, "main")
+	}
+}
+
+// TestGitCurrentBranchDetached verifies detached HEAD gets a readable label.
+func TestGitCurrentBranchDetached(t *testing.T) {
+	dir, _ := setupTestRepo(t)
+	cmd := exec.Command("git", "checkout", "--detach", "HEAD")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(),
+		"GIT_DIR="+filepath.Join(dir, ".git"),
+		"GIT_WORK_TREE="+dir,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git checkout --detach HEAD: %v\n%s", err, out)
+	}
+
+	g := NewGitClient(dir)
+	ref, err := g.CurrentRef()
+	if err != nil {
+		t.Fatalf("CurrentRef: %v", err)
+	}
+	branch, err := g.CurrentBranch()
+	if err != nil {
+		t.Fatalf("CurrentBranch: %v", err)
+	}
+	want := "detached@" + ref[:8]
+	if branch != want {
+		t.Errorf("CurrentBranch = %q, want %q", branch, want)
+	}
+}
+
 func TestParseDiff(t *testing.T) {
 	raw := `diff --git a/hello.go b/hello.go
 index abc..def 100644

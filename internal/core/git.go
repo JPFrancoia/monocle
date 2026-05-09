@@ -16,13 +16,14 @@ import (
 type GitAPI interface {
 	RepoRoot() string
 	CurrentRef() (string, error)
+	CurrentBranch() (string, error)
 	Diff(baseRef string) ([]types.ChangedFile, error)
 	FileDiff(baseRef, path string, contextLines int) (*types.DiffResult, error)
 	FileContent(ref, path string) (string, error)
 	RecentCommits(n int) ([]LogEntry, error)
 	ResolveRef(ref string) (string, error)
-	HashObject(path string) (string, error)                // writes blob to object store
-	HashObjectDry(path string) (string, error)             // computes SHA without writing
+	HashObject(path string) (string, error)                   // writes blob to object store
+	HashObjectDry(path string) (string, error)                // computes SHA without writing
 	HashObjectsDry(paths []string) (map[string]string, error) // batched HashObjectDry
 	CatFile(sha string) (string, error)
 }
@@ -158,6 +159,27 @@ func (g *GitClient) CurrentRef() (string, error) {
 		return "", fmt.Errorf("git rev-parse HEAD: %w", err)
 	}
 	return strings.TrimSpace(out), nil
+}
+
+// CurrentBranch returns the checked-out branch, or a detached HEAD label.
+func (g *GitClient) CurrentBranch() (string, error) {
+	out, err := g.run("branch", "--show-current")
+	if err != nil {
+		return "", fmt.Errorf("git branch --show-current: %w", err)
+	}
+	branch := strings.TrimSpace(out)
+	if branch != "" {
+		return branch, nil
+	}
+
+	ref, err := g.CurrentRef()
+	if err != nil {
+		return "", err
+	}
+	if len(ref) > 8 {
+		ref = ref[:8]
+	}
+	return "detached@" + ref, nil
 }
 
 // LogEntry represents a single commit in the log.

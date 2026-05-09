@@ -1,4 +1,4 @@
-.PHONY: build run install uninstall test check format vet lint
+.PHONY: build run install deploy uninstall test check format vet lint
 
 VERSION ?= dev
 
@@ -10,6 +10,9 @@ run: build
 
 install:
 	go install -ldflags "-X main.version=$(VERSION)" ./cmd/monocle
+
+deploy: build
+	install -m 755 ./bin/monocle /home/djipey/.local/bin/monocle
 
 uninstall:
 	rm -f $(shell go env GOPATH)/bin/monocle

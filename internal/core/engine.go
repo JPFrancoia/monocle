@@ -70,6 +70,7 @@ type EngineAPI interface {
 	StartSession(opts SessionOptions) (*types.ReviewSession, error)
 	ResumeSession(sessionID string) (*types.ReviewSession, error)
 	GetSession() *types.ReviewSession
+	GetRepoInfo() types.RepoInfo
 	ListSessions(opts ListSessionsOptions) ([]types.SessionSummary, error)
 
 	// Browsing

@@ -239,6 +239,45 @@ func TestLayoutConfigAutoDefault(t *testing.T) {
 	}
 }
 
+// TestTitleBarShowsRepoAndBranch verifies the title exposes git context.
+func TestTitleBarShowsRepoAndBranch(t *testing.T) {
+	m := NewApp(nil)
+	m.width = 120
+	m.repoInfo = types.RepoInfo{Name: "monocle", Branch: "feature/header"}
+
+	view := m.renderTitleBar()
+	if !strings.Contains(view, "monocle → feature/header") {
+		t.Fatalf("expected repo and branch in title bar, got %q", view)
+	}
+}
+
+// TestRepoTitleContextOmitsEmptyBranch verifies non-git mode avoids branch UI.
+func TestRepoTitleContextOmitsEmptyBranch(t *testing.T) {
+	context := repoTitleContext(types.RepoInfo{Root: "/tmp/project"})
+	if context != "project" {
+		t.Fatalf("repoTitleContext = %q, want %q", context, "project")
+	}
+	if strings.Contains(context, "→") {
+		t.Fatalf("context should not include branch arrow without branch: %q", context)
+	}
+}
+
+// TestTitleBarKeepsFocusModeBadge verifies repo context does not hide focus state.
+func TestTitleBarKeepsFocusModeBadge(t *testing.T) {
+	m := NewApp(nil)
+	m.width = 120
+	m.focusModeActive = true
+	m.repoInfo = types.RepoInfo{Name: "monocle", Branch: "main"}
+
+	view := m.renderTitleBar()
+	if !strings.Contains(view, "monocle → main") {
+		t.Fatalf("expected repo context in title bar, got %q", view)
+	}
+	if !strings.Contains(view, "FOCUS MODE") {
+		t.Fatalf("expected focus mode badge in title bar, got %q", view)
+	}
+}
+
 func TestOverlayOn(t *testing.T) {
 	t.Run("preserves base content on both sides", func(t *testing.T) {
 		// Build a base tall enough for the min topPad of 5

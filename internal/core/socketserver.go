@@ -492,6 +492,8 @@ func (s *SocketServer) handleMessage(msg any) any {
 		return s.engine.handleResumeSession(m)
 	case *protocol.GetSessionMsg:
 		return s.engine.handleGetSession(m)
+	case *protocol.GetRepoInfoMsg:
+		return s.engine.handleGetRepoInfo(m)
 	case *protocol.ListSessionsMsg:
 		return s.engine.handleListSessions(m)
 	case *protocol.RefreshChangedFilesMsg:

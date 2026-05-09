@@ -30,6 +30,11 @@ func (d *DirClient) CurrentRef() (string, error) {
 	return "WORKING", nil
 }
 
+// CurrentBranch returns no branch in non-git directory mode.
+func (d *DirClient) CurrentBranch() (string, error) {
+	return "", nil
+}
+
 // Diff walks the directory and returns all regular files as "added".
 func (d *DirClient) Diff(_ string) ([]types.ChangedFile, error) {
 	var files []types.ChangedFile

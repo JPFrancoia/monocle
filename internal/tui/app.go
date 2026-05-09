@@ -35,6 +35,8 @@ const (
 
 const defaultMinDiffWidth = 80
 
+const repoInfoRefreshInterval = 30 * time.Second
+
 // overlayKind identifies which (if any) overlay is shown.
 type overlayKind int
 
@@ -165,6 +167,10 @@ type mcpRegisterResultMsg struct {
 
 type refreshTickMsg struct{}
 
+type repoInfoMsg struct {
+	info types.RepoInfo
+}
+
 func refreshTick() tea.Cmd {
 	return tea.Tick(2*time.Second, func(time.Time) tea.Msg {
 		return refreshTickMsg{}
@@ -227,6 +233,8 @@ type appModel struct {
 
 	showSessionPicker bool   // open session picker on startup
 	repoRoot          string // repo root for session listing
+	repoInfo          types.RepoInfo
+	repoInfoUpdatedAt time.Time
 
 	nonGitMode bool            // directory mode (no git)
 	infoBanner infoBannerModel // info modal for non-git startup
@@ -297,6 +305,7 @@ func NewApp(engine core.EngineAPI, opts ...AppOptions) appModel {
 	if o.NonGitMode {
 		dv.style = diffStyleFile
 	}
+	repoInfo := repoInfoForRoot(o.RepoRoot)
 
 	return appModel{
 		engine:            engine,
@@ -324,6 +333,7 @@ func NewApp(engine core.EngineAPI, opts ...AppOptions) appModel {
 		minDiffWidth:      minDiffW,
 		showSessionPicker: o.ShowSessionPicker,
 		repoRoot:          o.RepoRoot,
+		repoInfo:          repoInfo,
 		nonGitMode:        o.NonGitMode,
 	}
 }
@@ -331,6 +341,9 @@ func NewApp(engine core.EngineAPI, opts ...AppOptions) appModel {
 // Init loads the initial file list from the engine, starts the refresh tick, and kicks off the TUI event loop.
 func (m appModel) Init() tea.Cmd {
 	cmds := []tea.Cmd{refreshTick()}
+	if cmd := m.loadRepoInfo(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
 
 	if m.showSessionPicker {
 		// Defer file loading until user picks a session
@@ -475,7 +488,18 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Periodic refresh — fires on a timer to keep the file list and diff in sync.
 	case refreshTickMsg:
-		return m, tea.Batch(m.refreshFiles(), refreshTick())
+		cmds := []tea.Cmd{m.refreshFiles(), refreshTick()}
+		if time.Since(m.repoInfoUpdatedAt) >= repoInfoRefreshInterval {
+			if cmd := m.loadRepoInfo(); cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		return m, tea.Batch(cmds...)
+
+	case repoInfoMsg:
+		m.repoInfo = msg.info
+		m.repoInfoUpdatedAt = time.Now()
+		return m, nil
 
 	case refreshResultMsg:
 		prevKind, prevID := m.sidebar.currentItemKey()
@@ -2551,6 +2575,17 @@ func (m appModel) refreshFiles() tea.Cmd {
 	}
 }
 
+// loadRepoInfo refreshes the repository context used by the title bar.
+func (m appModel) loadRepoInfo() tea.Cmd {
+	engine := m.engine
+	if engine == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		return repoInfoMsg{info: engine.GetRepoInfo()}
+	}
+}
+
 // contentItemChanged reports whether a refreshed content item differs from what
 // the diff view is currently showing (content text or comment state).
 func contentItemChanged(item *types.ContentItem, comments []types.ReviewComment, dv *diffViewModel) bool {
@@ -2623,18 +2658,7 @@ type loadContentMsg struct {
 
 // View renders the full TUI layout.
 func (m appModel) View() tea.View {
-	// Title bar
-	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("4")).Render(" o_(◉) monocle")
-	if m.focusModeActive {
-		badge := lipgloss.NewStyle().
-			Background(lipgloss.Color("5")).
-			Foreground(lipgloss.Color("0")).
-			Bold(true).
-			Padding(0, 1).
-			Render("FOCUS MODE")
-		title = title + " " + badge
-	}
-	titleBar := lipgloss.NewStyle().Width(m.width).Render(title)
+	titleBar := m.renderTitleBar()
 
 	sidebarStyle := m.theme.SidebarBorder
 	if m.focus == focusSidebar {
@@ -2771,6 +2795,67 @@ func (m appModel) View() tea.View {
 		v.MouseMode = tea.MouseModeCellMotion
 	}
 	return v
+}
+
+// renderTitleBar renders the app title with optional repo, branch, and focus state.
+func (m appModel) renderTitleBar() string {
+	title := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("4")).Render(" o_(◉) monocle")
+	badge := ""
+	if m.focusModeActive {
+		badge = lipgloss.NewStyle().
+			Background(lipgloss.Color("5")).
+			Foreground(lipgloss.Color("0")).
+			Bold(true).
+			Padding(0, 1).
+			Render("FOCUS MODE")
+	}
+
+	if context := repoTitleContext(m.repoInfo); context != "" {
+		available := m.width - lipgloss.Width(title) - lipgloss.Width(badge)
+		if badge != "" {
+			available--
+		}
+		if available > 3 {
+			marker := "..."
+			if available-2 <= lipgloss.Width(marker) {
+				marker = ""
+			}
+			context = "  " + ansi.Truncate(context, available-2, marker)
+			title += lipgloss.NewStyle().Faint(true).Render(context)
+		}
+	}
+	if badge != "" {
+		title += " " + badge
+	}
+	return lipgloss.NewStyle().Width(m.width).Render(title)
+}
+
+// repoTitleContext formats repository context for display in the title bar.
+func repoTitleContext(info types.RepoInfo) string {
+	name := strings.TrimSpace(info.Name)
+	if name == "" && info.Root != "" {
+		name = filepath.Base(info.Root)
+	}
+	branch := strings.TrimSpace(info.Branch)
+	if name == "" {
+		return ""
+	}
+	if branch == "" {
+		return name
+	}
+	return name + " → " + branch
+}
+
+// repoInfoForRoot builds cheap title-bar metadata from a resolved repository root.
+func repoInfoForRoot(root string) types.RepoInfo {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return types.RepoInfo{}
+	}
+	return types.RepoInfo{
+		Root: root,
+		Name: filepath.Base(root),
+	}
 }
 
 // overlayOn centers overlay content over base content, preserving base content

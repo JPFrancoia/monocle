@@ -19,6 +19,8 @@ import (
 // the same socket. Incoming messages are demultiplexed into either the local
 // event bus (for EventNotification) or the pending request channel.
 type EngineClient struct {
+	socketPath string
+
 	conn    net.Conn
 	scanner *bufio.Scanner
 
@@ -49,6 +51,7 @@ func NewEngineClient(socketPath string) (*EngineClient, error) {
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 
 	c := &EngineClient{
+		socketPath:  socketPath,
 		conn:        conn,
 		scanner:     scanner,
 		pending:     make(chan any, 1),
@@ -260,6 +263,44 @@ func (c *EngineClient) GetSession() *types.ReviewSession {
 		return nil
 	}
 	return resp.(*protocol.GetSessionResponse).Session
+}
+
+// GetRepoInfo fetches repository metadata from the serve process.
+func (c *EngineClient) GetRepoInfo() types.RepoInfo {
+	if c.socketPath == "" {
+		return types.RepoInfo{}
+	}
+	conn, err := net.DialTimeout("unix", c.socketPath, time.Second)
+	if err != nil {
+		return types.RepoInfo{}
+	}
+	defer conn.Close()
+	if err := conn.SetDeadline(time.Now().Add(time.Second)); err != nil {
+		return types.RepoInfo{}
+	}
+
+	data, err := protocol.Encode(&protocol.GetRepoInfoMsg{Type: protocol.TypeGetRepoInfo})
+	if err != nil {
+		return types.RepoInfo{}
+	}
+	if _, err := conn.Write(data); err != nil {
+		return types.RepoInfo{}
+	}
+
+	scanner := bufio.NewScanner(conn)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	if !scanner.Scan() {
+		return types.RepoInfo{}
+	}
+	resp, err := protocol.Decode(scanner.Bytes())
+	if err != nil {
+		return types.RepoInfo{}
+	}
+	r, ok := resp.(*protocol.GetRepoInfoResponse)
+	if !ok {
+		return types.RepoInfo{}
+	}
+	return r.Info
 }
 
 func (c *EngineClient) ListSessions(opts core.ListSessionsOptions) ([]types.SessionSummary, error) {
@@ -764,8 +805,8 @@ func (c *EngineClient) StartServer(_ string) error { return nil }
 // call. They're implemented as no-ops on the client so the interface is
 // satisfied; any frontend that needed them would use the existing CLI-level
 // PollFeedbackMsg / SubmitContentMsg plumbing.
-func (c *EngineClient) PollFeedback() *core.FormattedReview     { return nil }
-func (c *EngineClient) WaitForFeedback() *core.FormattedReview  { return nil }
+func (c *EngineClient) PollFeedback() *core.FormattedReview    { return nil }
+func (c *EngineClient) WaitForFeedback() *core.FormattedReview { return nil }
 func (c *EngineClient) GetReviewStatusInfo() *core.ReviewStatusInfo {
 	return nil
 }
