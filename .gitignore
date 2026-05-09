@@ -5,7 +5,6 @@ dist/
 *.db-wal
 .DS_Store
 node_modules
-.devbox/
 src/
 test/
 scripts/

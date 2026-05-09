@@ -82,7 +82,7 @@
       "Bash(uname:*)",
       "Bash(date:*)",
       "Bash(diff:*)",
-      "Bash(devbox run -- make*)",
+      "Bash(make*)",
       "Bash(monocle review:*)",
       "Bash(./bin/monocle review:*)"
     ]

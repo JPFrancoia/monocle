@@ -1,1 +1,0 @@
-eval "$(devbox shellenv 2>/dev/null)" || true

@@ -1,4 +1,4 @@
-.PHONY: build run install uninstall test vet lint sync-skills skills-tarball
+.PHONY: build run install uninstall test check format vet lint sync-skills skills-tarball
 
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 
@@ -15,7 +15,16 @@ uninstall:
 	rm -f $(shell go env GOPATH)/bin/monocle
 
 test:
-	go test ./internal/...
+	go tool gotestsum -- -count=1 -cover -p 1 ./...
+
+check:
+	trivy fs --scanners vuln,secret,misconfig .
+
+format:
+	find . -name "*.go" -type f | while read -r file; do \
+		golines -w --no-reformat-tags "$$file"; \
+		gofmt -w "$$file"; \
+	done
 
 vet:
 	go vet ./...

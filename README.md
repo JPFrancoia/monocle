@@ -77,7 +77,7 @@ sudo mv monocle /usr/local/bin/
 ```bash
 git clone https://github.com/josephschmitt/monocle.git
 cd monocle
-devbox run -- make build
+make build
 # Binaries are in bin/
 ```
 

@@ -5,13 +5,12 @@ Terminal-based code review companion for AI coding agents. Developers run it alo
 ## Quick Start
 
 ```bash
-devbox shell                          # Sets up Go + lefthook
-devbox run -- make build              # Build binary → bin/
-devbox run -- make test               # Run tests
-devbox run -- make lint               # Vet + build check
+make build                            # Build binary → bin/
+make test                             # Run tests with gotestsum
+make lint                             # Vet + build check
 ```
 
-**Always use `devbox run --` for Go commands.** Never use the global `go` binary.
+Use plain Go/Make commands.
 
 ## Architecture
 
@@ -78,7 +77,7 @@ User reviews, adds comments, submits → FeedbackQueue releases → notification
 
 ## Tech Stack
 
-- **Go** (1.23 via devbox, module requires 1.25+)
+- **Go** (module requires 1.25+)
 - **Bubble Tea v2** — TUI framework. Uses `tea.Model` interface, `tea.View` struct (not string), `tea.KeyPressMsg` (not KeyMsg). Alt-screen set via `v.AltScreen = true` in View().
 - **Lipgloss v2** — Styling. `lipgloss.Color()` is a function returning `color.Color`, not a type.
 - **Bubbles v2** — UI components (key bindings)
