@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -146,6 +147,32 @@ func TestEngineClient_RoundTrip(t *testing.T) {
 	}
 	if count := ec.GetSubscriberCount(); count != 1 {
 		t.Errorf("GetSubscriberCount = %d, want 1", count)
+	}
+}
+
+func TestEngineClient_LargeDiffResponse(t *testing.T) {
+	engine, socketPath := setupEngine(t)
+	repoRoot := engine.GetSession().RepoRoot
+	content := bytes.Repeat([]byte("x"), 2*1024*1024)
+	if err := os.WriteFile(filepath.Join(repoRoot, "large.txt"), content, 0o644); err != nil {
+		t.Fatalf("write large file: %v", err)
+	}
+
+	ec, err := NewEngineClient(socketPath)
+	if err != nil {
+		t.Fatalf("new engine client: %v", err)
+	}
+	t.Cleanup(func() { ec.Close() })
+
+	result, err := ec.GetFileDiff("large.txt")
+	if err != nil {
+		t.Fatalf("large file diff: %v", err)
+	}
+	if len(result.Hunks) != 1 || len(result.Hunks[0].Lines) != 1 {
+		t.Fatalf("unexpected large diff shape: %#v", result.Hunks)
+	}
+	if got := len(result.Hunks[0].Lines[0].Content); got != len(content) {
+		t.Fatalf("large diff content length = %d, want %d", got, len(content))
 	}
 }
 

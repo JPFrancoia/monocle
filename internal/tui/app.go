@@ -362,12 +362,7 @@ func (m appModel) Init() tea.Cmd {
 			return openSessionPickerMsg{sessions: sessions}
 		})
 	} else {
-		cmds = append(cmds, func() tea.Msg {
-			files := m.engine.GetChangedFiles()
-			items := m.engine.GetContentItems()
-			additional := m.engine.GetAdditionalFiles()
-			return initialLoadMsg{files: files, items: items, additionalFiles: additional}
-		})
+		cmds = append(cmds, m.loadInitialItems())
 	}
 
 	if m.mcpRegisterFn != nil {
@@ -384,6 +379,21 @@ func (m appModel) Init() tea.Cmd {
 		})
 	}
 	return tea.Batch(cmds...)
+}
+
+// loadInitialItems refreshes changed files before the first render so a TUI
+// attaching to an existing serve process does not show stale cached paths.
+func (m appModel) loadInitialItems() tea.Cmd {
+	engine := m.engine
+	return func() tea.Msg {
+		files, err := engine.RefreshChangedFiles()
+		if err != nil {
+			files = engine.GetChangedFiles()
+		}
+		items := engine.GetContentItems()
+		additional := engine.GetAdditionalFiles()
+		return initialLoadMsg{files: files, items: items, additionalFiles: additional}
+	}
 }
 
 // startSessionAndLoad creates a new session on the engine and returns a cmd
@@ -2313,7 +2323,7 @@ func (m appModel) handleSidebarSelect(msg sidebarSelectMsg) tea.Cmd {
 	return func() tea.Msg {
 		result, err := m.engine.GetFileDiff(msg.path)
 		if err != nil {
-			return loadDiffMsg{path: msg.path}
+			return loadDiffMsg{path: msg.path, err: err}
 		}
 		session := m.engine.GetSession()
 		var comments []types.ReviewComment
@@ -2405,7 +2415,7 @@ func (m appModel) handleSaveComment(msg saveCommentMsg) tea.Cmd {
 		// Reload diff for the file
 		result, err := m.engine.GetFileDiff(msg.path)
 		if err != nil {
-			return loadDiffMsg{path: msg.path}
+			return loadDiffMsg{path: msg.path, err: err}
 		}
 		session := m.engine.GetSession()
 		var comments []types.ReviewComment

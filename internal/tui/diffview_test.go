@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 	"testing"
 
@@ -91,6 +92,30 @@ func TestIsBinaryContent(t *testing.T) {
 				t.Errorf("isBinaryContent() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestDiffViewLoadDiffErrorIsShown(t *testing.T) {
+	theme := DefaultTheme()
+	keys := DefaultKeyMap()
+	m := newDiffViewModel(&theme, &keys)
+	m.width = 80
+	m.height = 20
+
+	updated, _ := m.Update(loadDiffMsg{
+		path: "large.csv",
+		err:  errors.New("read: bufio.Scanner: token too long"),
+	})
+
+	view := updated.View()
+	if !strings.Contains(view, "Could not load diff") {
+		t.Fatalf("expected diff load error heading, got %q", view)
+	}
+	if !strings.Contains(view, "token too long") {
+		t.Fatalf("expected underlying error, got %q", view)
+	}
+	if strings.Contains(view, "No changes") {
+		t.Fatalf("error view must not say No changes: %q", view)
 	}
 }
 

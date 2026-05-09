@@ -54,6 +54,7 @@ type diffViewModel struct {
 	hunks    []types.DiffHunk
 	comments []types.ReviewComment
 	lines    []diffViewLine
+	loadErr  string
 	cursor   int
 	offset   int // scroll offset
 	width    int
@@ -114,6 +115,7 @@ func (m *diffViewModel) clearFileState() {
 	m.hunks = nil
 	m.lines = nil
 	m.comments = nil
+	m.loadErr = ""
 	m.isBinary = false
 	m.cursor = 0
 	m.offset = 0
@@ -136,6 +138,7 @@ func newDiffViewModel(theme *Theme, keys *KeyMap) diffViewModel {
 type loadDiffMsg struct {
 	path            string
 	result          *types.DiffResult
+	err             error
 	comments        []types.ReviewComment
 	selectCommentID string // if set, auto-select and expand this comment after loading
 }
@@ -228,7 +231,21 @@ func (m diffViewModel) Update(msg tea.Msg) (diffViewModel, tea.Cmd) {
 		m.contentID = ""
 		m.contentTitle = ""
 		m.additionalFilePath = ""
+		m.loadErr = ""
 		sameFile := msg.path == m.path
+		if msg.err != nil {
+			m.path = msg.path
+			m.hunks = nil
+			m.comments = nil
+			m.lines = nil
+			m.isBinary = false
+			m.loadErr = msg.err.Error()
+			m.cursor = 0
+			m.offset = 0
+			m.hOffset = 0
+			m.visualMode = false
+			return m, nil
+		}
 		if msg.result != nil {
 			m.hunks = msg.result.Hunks
 		} else {
@@ -264,6 +281,7 @@ func (m diffViewModel) Update(msg tea.Msg) (diffViewModel, tea.Cmd) {
 	case loadContentMsg:
 		isReload := m.contentMode && m.contentID == msg.id
 		m.contentMode = true
+		m.loadErr = ""
 		m.contentID = msg.id
 		m.contentTitle = msg.title
 		m.contentVersionCount = msg.versionCount
@@ -313,6 +331,7 @@ func (m diffViewModel) Update(msg tea.Msg) (diffViewModel, tea.Cmd) {
 			return m, nil // stay in content mode on error or no changes
 		}
 		m.contentMode = false
+		m.loadErr = ""
 		m.hunks = msg.result.Hunks
 		m.comments = msg.comments
 		m.style = msg.preferredStyle
@@ -327,6 +346,7 @@ func (m diffViewModel) Update(msg tea.Msg) (diffViewModel, tea.Cmd) {
 
 	case loadFileContentMsg:
 		if msg.err != nil {
+			m.loadErr = ""
 			m.style = diffStyleFile
 			m.path = msg.path
 			m.hunks = nil
@@ -342,6 +362,7 @@ func (m diffViewModel) Update(msg tea.Msg) (diffViewModel, tea.Cmd) {
 			return m, nil
 		}
 		m.style = diffStyleFile
+		m.loadErr = ""
 		m.comments = msg.comments
 		sameFile := msg.path == m.path
 		prevCursor := m.cursor
@@ -363,6 +384,7 @@ func (m diffViewModel) Update(msg tea.Msg) (diffViewModel, tea.Cmd) {
 			return m, nil
 		}
 		m.contentMode = false
+		m.loadErr = ""
 		m.contentID = ""
 		m.contentTitle = ""
 		m.additionalFilePath = msg.path
@@ -545,6 +567,11 @@ func (m diffViewModel) View() string {
 	if m.width == 0 || len(m.lines) == 0 {
 		if m.path == "" {
 			return renderSplash(m.width, m.height)
+		}
+		if m.loadErr != "" {
+			heading := lipgloss.NewStyle().Bold(true).Render("Could not load diff")
+			dim := lipgloss.NewStyle().Faint(true)
+			return centerBlock([]string{heading, "", dim.Render(m.loadErr)}, m.width, m.height)
 		}
 		if m.contentMode {
 			return centerBlock([]string{"Empty content"}, m.width, m.height)

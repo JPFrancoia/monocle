@@ -1,9 +1,12 @@
 package client_test
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/josephschmitt/monocle/internal/client"
@@ -44,6 +47,36 @@ func setupTestEngine(t *testing.T) (*core.Engine, string) {
 	t.Cleanup(func() { engine.Shutdown() })
 
 	return engine, socketPath
+}
+
+func TestClient_LargeDiffResponse(t *testing.T) {
+	engine, socketPath := setupTestEngine(t)
+	repoRoot := engine.GetSession().RepoRoot
+	content := bytes.Repeat([]byte("x"), 2*1024*1024)
+	if err := os.WriteFile(filepath.Join(repoRoot, "large.txt"), content, 0o644); err != nil {
+		t.Fatalf("write large file: %v", err)
+	}
+
+	c, err := client.Connect(socketPath)
+	if err != nil {
+		t.Fatalf("connect: %v", err)
+	}
+	defer c.Close()
+
+	resp, err := c.Request(&protocol.GetFileDiffMsg{Type: protocol.TypeGetFileDiff, Path: "large.txt"}, client.DefaultTimeout)
+	if err != nil {
+		t.Fatalf("large diff request: %v", err)
+	}
+	diff := resp.(*protocol.GetFileDiffResponse)
+	if diff.Error != "" {
+		t.Fatalf("large diff error: %s", diff.Error)
+	}
+	if len(diff.Diff.Hunks) != 1 || len(diff.Diff.Hunks[0].Lines) != 1 {
+		t.Fatalf("unexpected large diff shape: %#v", diff.Diff.Hunks)
+	}
+	if got := len(diff.Diff.Hunks[0].Lines[0].Content); got != len(content) {
+		t.Fatalf("large diff content length = %d, want %d", got, len(content))
+	}
 }
 
 func TestClient_ReviewStatus(t *testing.T) {

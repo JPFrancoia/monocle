@@ -48,7 +48,7 @@ func NewEngineClient(socketPath string) (*EngineClient, error) {
 		return nil, fmt.Errorf("dial %s: %w", socketPath, err)
 	}
 	scanner := bufio.NewScanner(conn)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), protocol.MaxMessageBytes)
 
 	c := &EngineClient{
 		socketPath:  socketPath,
@@ -288,7 +288,7 @@ func (c *EngineClient) GetRepoInfo() types.RepoInfo {
 	}
 
 	scanner := bufio.NewScanner(conn)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), protocol.MaxMessageBytes)
 	if !scanner.Scan() {
 		return types.RepoInfo{}
 	}

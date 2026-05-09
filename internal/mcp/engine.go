@@ -83,7 +83,7 @@ func (e *engineConn) connectAndListen(ctx context.Context, socketPath string) er
 	}
 
 	scanner := bufio.NewScanner(conn)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), protocol.MaxMessageBytes)
 
 	// Read connect response
 	if !scanner.Scan() {

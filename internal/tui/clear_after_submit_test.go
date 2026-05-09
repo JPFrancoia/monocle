@@ -16,17 +16,31 @@ type stubEngine struct {
 	cfg            *types.Config
 	session        *types.ReviewSession
 	contentItems   []types.ContentItem
+	changedFiles   []types.ChangedFile
+	refreshedFiles []types.ChangedFile
+	refreshErr     error
+	refreshCalled  bool
 	cleared        bool
 	dismissCalled  bool
 }
 
-func (s *stubEngine) GetConfig() *types.Config                  { return s.cfg }
-func (s *stubEngine) GetSession() *types.ReviewSession           { return s.session }
-func (s *stubEngine) GetFeedbackStatus() string { return "" }
-func (s *stubEngine) GetQueuedCount() int        { return 0 }
-func (s *stubEngine) ReloadPendingFeedback()     {}
-func (s *stubEngine) SelectedBaseRef() string    { return "" }
-func (s *stubEngine) GetChangedFiles() []types.ChangedFile       { return nil }
+func (s *stubEngine) GetConfig() *types.Config             { return s.cfg }
+func (s *stubEngine) GetSession() *types.ReviewSession     { return s.session }
+func (s *stubEngine) GetFeedbackStatus() string            { return "" }
+func (s *stubEngine) GetQueuedCount() int                  { return 0 }
+func (s *stubEngine) ReloadPendingFeedback()               {}
+func (s *stubEngine) SelectedBaseRef() string              { return "" }
+func (s *stubEngine) GetChangedFiles() []types.ChangedFile { return s.changedFiles }
+func (s *stubEngine) RefreshChangedFiles() ([]types.ChangedFile, error) {
+	s.refreshCalled = true
+	if s.refreshErr != nil {
+		return nil, s.refreshErr
+	}
+	if s.refreshedFiles != nil {
+		return s.refreshedFiles, nil
+	}
+	return s.changedFiles, nil
+}
 func (s *stubEngine) GetAdditionalFiles() []types.AdditionalFile { return nil }
 func (s *stubEngine) MarkContentReviewed(id string) error        { return nil }
 func (s *stubEngine) UnmarkContentReviewed(id string) error      { return nil }
@@ -39,12 +53,12 @@ func (s *stubEngine) GetContentItem(id string) (*types.ContentItem, error) {
 	}
 	return nil, fmt.Errorf("not found")
 }
-func (s *stubEngine) GetSnapshots() ([]types.ReviewSnapshot, error)   { return nil, nil }
-func (s *stubEngine) SetSnapshotBase(snapshotID int) error             { return nil }
-func (s *stubEngine) ClearSnapshotBase()                               {}
-func (s *stubEngine) GetActiveSnapshot() *types.ReviewSnapshot         { return nil }
-func (s *stubEngine) HasSnapshots() (bool, error)                      { return false, nil }
-func (s *stubEngine) IsReviewTrackingEnabled() bool                    { return s.cfg != nil && s.cfg.ReviewTracking }
+func (s *stubEngine) GetSnapshots() ([]types.ReviewSnapshot, error) { return nil, nil }
+func (s *stubEngine) SetSnapshotBase(snapshotID int) error          { return nil }
+func (s *stubEngine) ClearSnapshotBase()                            {}
+func (s *stubEngine) GetActiveSnapshot() *types.ReviewSnapshot      { return nil }
+func (s *stubEngine) HasSnapshots() (bool, error)                   { return false, nil }
+func (s *stubEngine) IsReviewTrackingEnabled() bool                 { return s.cfg != nil && s.cfg.ReviewTracking }
 func (s *stubEngine) ClearComments() error {
 	s.cleared = true
 	return nil
@@ -88,6 +102,45 @@ func newTestSession(withComments bool) *types.ReviewSession {
 		}
 	}
 	return session
+}
+
+func TestLoadInitialItemsRefreshesChangedFiles(t *testing.T) {
+	engine := &stubEngine{
+		cfg:            &types.Config{},
+		changedFiles:   []types.ChangedFile{{Path: "stale.go", Status: types.FileModified}},
+		refreshedFiles: []types.ChangedFile{{Path: "fresh.go", Status: types.FileModified}},
+	}
+	m := NewApp(engine)
+
+	msg := m.loadInitialItems()()
+	load, ok := msg.(initialLoadMsg)
+	if !ok {
+		t.Fatalf("expected initialLoadMsg, got %T", msg)
+	}
+	if !engine.refreshCalled {
+		t.Fatal("expected RefreshChangedFiles to be called")
+	}
+	if len(load.files) != 1 || load.files[0].Path != "fresh.go" {
+		t.Fatalf("expected refreshed file list, got %#v", load.files)
+	}
+}
+
+func TestLoadInitialItemsFallsBackToCachedFilesOnRefreshError(t *testing.T) {
+	engine := &stubEngine{
+		cfg:          &types.Config{},
+		changedFiles: []types.ChangedFile{{Path: "cached.go", Status: types.FileModified}},
+		refreshErr:   fmt.Errorf("refresh failed"),
+	}
+	m := NewApp(engine)
+
+	msg := m.loadInitialItems()()
+	load, ok := msg.(initialLoadMsg)
+	if !ok {
+		t.Fatalf("expected initialLoadMsg, got %T", msg)
+	}
+	if len(load.files) != 1 || load.files[0].Path != "cached.go" {
+		t.Fatalf("expected cached file list, got %#v", load.files)
+	}
 }
 
 func TestSubmitSuccess_AlwaysClearsComments(t *testing.T) {

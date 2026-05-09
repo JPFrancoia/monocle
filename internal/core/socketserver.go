@@ -220,7 +220,7 @@ func (s *SocketServer) acceptLoop() {
 // Otherwise, it's a one-shot request/response as before.
 func (s *SocketServer) handleConnection(conn net.Conn) {
 	scanner := bufio.NewScanner(conn)
-	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), protocol.MaxMessageBytes)
 
 	if !scanner.Scan() {
 		conn.Close()

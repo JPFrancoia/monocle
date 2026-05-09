@@ -5,6 +5,11 @@ import (
 	"fmt"
 )
 
+// MaxMessageBytes is the largest single newline-delimited protocol message we
+// accept over the local Unix socket. Large added files can serialize to multi-MB
+// diff responses, so keep this comfortably above typical source-file sizes.
+const MaxMessageBytes = 64 * 1024 * 1024
+
 // Encode marshals a message to a JSON line (with trailing newline).
 func Encode(msg any) ([]byte, error) {
 	data, err := json.Marshal(msg)
