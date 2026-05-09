@@ -183,12 +183,12 @@ type AppOptions struct {
 type appModel struct {
 	engine core.EngineAPI
 
-	sidebar       sidebarModel
-	diffView      diffViewModel
-	statusBar     statusBarModel
-	commentEditor commentEditorModel
-	reviewSummary reviewSummaryModel
-	help          helpModel
+	sidebar        sidebarModel
+	diffView       diffViewModel
+	statusBar      statusBarModel
+	commentEditor  commentEditorModel
+	reviewSummary  reviewSummaryModel
+	help           helpModel
 	refPicker      refPickerModel
 	confirm        confirmModel
 	connectionInfo connectionInfoModel
@@ -196,10 +196,10 @@ type appModel struct {
 	sessionPicker  sessionPickerModel
 	versionPicker  versionPickerModel
 
-	focus         focusTarget
-	overlay       overlayKind
-	layout        layoutMode
-	layoutConfig  string
+	focus             focusTarget
+	overlay           overlayKind
+	layout            layoutMode
+	layoutConfig      string
 	sidebarHidden     bool
 	sidebarAutoHidden bool // true when sidebar was hidden due to empty state (not user action)
 	sidebarUserShown  bool // true when user explicitly showed the sidebar (prevents auto-hide)
@@ -213,8 +213,8 @@ type appModel struct {
 	theme Theme
 	keys  KeyMap
 
-	mcpRegisterFn    func(global bool) error
-	registerPrompt   registerPromptModel
+	mcpRegisterFn  func(global bool) error
+	registerPrompt registerPromptModel
 
 	pendingDismissArtifactID string // set while the dismiss-artifact confirm modal is open
 
@@ -228,8 +228,8 @@ type appModel struct {
 	showSessionPicker bool   // open session picker on startup
 	repoRoot          string // repo root for session listing
 
-	nonGitMode bool             // directory mode (no git)
-	infoBanner infoBannerModel  // info modal for non-git startup
+	nonGitMode bool            // directory mode (no git)
+	infoBanner infoBannerModel // info modal for non-git startup
 }
 
 // NewApp creates the root appModel and wires up all subsystems.
@@ -299,26 +299,26 @@ func NewApp(engine core.EngineAPI, opts ...AppOptions) appModel {
 	}
 
 	return appModel{
-		engine:        engine,
-		sidebar:       sidebar,
-		diffView:      dv,
-		statusBar:     newStatusBarModel(theme),
-		commentEditor: newCommentEditorModel(theme),
-		reviewSummary: newReviewSummaryModel(theme),
-		help:          help,
-		refPicker:     newRefPickerModel(theme),
-		confirm:        newConfirmModel(theme),
-		connectionInfo: newConnectionInfoModel(theme),
-		history:        newHistoryModel(theme),
-		sessionPicker:  newSessionPickerModel(theme),
-		versionPicker:  newVersionPickerModel(theme),
-		registerPrompt: newRegisterPromptModel(theme),
-		infoBanner:     newInfoBannerModel(theme),
-		focus:         focusSidebar,
-		overlay:       overlayNone,
-		layoutConfig:  layoutCfg,
-		theme:         theme,
-		keys:          keys,
+		engine:            engine,
+		sidebar:           sidebar,
+		diffView:          dv,
+		statusBar:         newStatusBarModel(theme),
+		commentEditor:     newCommentEditorModel(theme),
+		reviewSummary:     newReviewSummaryModel(theme),
+		help:              help,
+		refPicker:         newRefPickerModel(theme),
+		confirm:           newConfirmModel(theme),
+		connectionInfo:    newConnectionInfoModel(theme),
+		history:           newHistoryModel(theme),
+		sessionPicker:     newSessionPickerModel(theme),
+		versionPicker:     newVersionPickerModel(theme),
+		registerPrompt:    newRegisterPromptModel(theme),
+		infoBanner:        newInfoBannerModel(theme),
+		focus:             focusSidebar,
+		overlay:           overlayNone,
+		layoutConfig:      layoutCfg,
+		theme:             theme,
+		keys:              keys,
 		mcpRegisterFn:     o.MCPRegisterFn,
 		mouseEnabled:      mouseEnabled,
 		minDiffWidth:      minDiffW,
@@ -450,7 +450,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
-			m.statusBar.agentName = session.Agent
 		}
 		m.statusBar.fileCount = len(msg.files)
 		m.statusBar.socketStarted = m.engine.GetSocketPath() != ""
@@ -498,11 +497,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// flicker from the content→auto-switch→diff cycle on every refresh tick.
 			if contentItemChanged(msg.contentItem, msg.contentComments, &m.diffView) {
 				m.diffView, diffCmd = m.diffView.Update(loadContentMsg{
-					id:                 msg.contentItem.ID,
-					title:              msg.contentItem.Title,
-					content:            msg.contentItem.Content,
-					contentType:        msg.contentItem.ContentType,
-					comments:           msg.contentComments,
+					id:             msg.contentItem.ID,
+					title:          msg.contentItem.Title,
+					content:        msg.contentItem.Content,
+					contentType:    msg.contentItem.ContentType,
+					comments:       msg.contentComments,
 					versionCount:   msg.contentItem.VersionCount,
 					autoSwitchDiff: msg.contentItem.VersionCount > 1 && m.diffView.contentMode,
 				})
@@ -575,9 +574,11 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.socketStarted = m.engine.GetSocketPath() != ""
 		if msg.agentName != "" {
 			m.statusBar.agentName = msg.agentName
+			m.statusBar.agentIdentified = true
 		}
 		if msg.count == 0 && msg.mode == "" {
 			m.statusBar.agentName = ""
+			m.statusBar.agentIdentified = false
 		}
 		m.reviewSummary.agentConnected = msg.count > 0 || msg.mode == "queue"
 		return m, nil
@@ -1521,7 +1522,7 @@ func (m appModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case Matches(key, km.ToggleSidebar):
 		m.sidebarHidden = !m.sidebarHidden
-		m.sidebarAutoHidden = false          // user explicitly toggled
+		m.sidebarAutoHidden = false           // user explicitly toggled
 		m.sidebarUserShown = !m.sidebarHidden // track if user forced it visible
 		if m.sidebarHidden {
 			m.focus = focusMain
@@ -2519,8 +2520,8 @@ func (m appModel) refreshFiles() tea.Cmd {
 			}
 			if itemErr == nil && item != nil {
 				return refreshResultMsg{
-					files:       files,
-					contentItem: item,
+					files:           files,
+					contentItem:     item,
 					contentComments: contentComments,
 				}
 			}

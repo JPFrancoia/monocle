@@ -8,17 +8,18 @@ import (
 )
 
 type statusBarModel struct {
-	agentName       string
-	baseRef         string
-	fileCount       int
-	commentCount    int
-	feedbackStatus  string
-	subscriberCount int
-	connectionMode  string // "queue" for queue-mode connections
-	socketStarted   bool
-	commandMode     bool
-	commandBuffer   string
-	contextHints    string // override hints when set (e.g. comment-specific keybinds)
+	agentName        string
+	agentIdentified  bool
+	baseRef          string
+	fileCount        int
+	commentCount     int
+	feedbackStatus   string
+	subscriberCount  int
+	connectionMode   string // "queue" for queue-mode connections
+	socketStarted    bool
+	commandMode      bool
+	commandBuffer    string
+	contextHints     string // override hints when set (e.g. comment-specific keybinds)
 	diffStyle        diffStyle
 	contentMode      bool   // true when viewing content (plan/doc) in raw mode
 	contentID        string // non-empty when viewing a content item (raw or diff)
@@ -45,9 +46,9 @@ func (m statusBarModel) View() string {
 		return m.theme.StatusBar.Width(m.width).Render(cmdLine)
 	}
 
-	// Connection status with agent name
+	// Connection status reports engine connectivity. Agent identity is rendered
+	// separately so stale session names do not look like connection state.
 	var connLabel string
-	name := m.agentName
 	switch {
 	case m.waitingForReview:
 		waitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("3"))
@@ -58,9 +59,6 @@ func (m statusBarModel) View() string {
 		connLabel = waitStyle.Render(icon + " Waiting for Review")
 	case m.subscriberCount > 0 || m.connectionMode == "queue":
 		connLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("● Connected")
-		if name != "" {
-			connLabel += " " + name
-		}
 	case m.socketStarted:
 		connLabel = lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Render("○ Waiting")
 	default:
@@ -68,7 +66,11 @@ func (m statusBarModel) View() string {
 	}
 
 	// Info sections
-	parts := []string{connLabel}
+	agentName := strings.TrimSpace(m.agentName)
+	if agentName == "" || !m.agentIdentified {
+		agentName = "unknown"
+	}
+	parts := []string{connLabel, fmt.Sprintf("Agent: %s", agentName)}
 
 	if m.baseRef != "" && m.baseRef != "WORKING" {
 		ref := m.baseRef

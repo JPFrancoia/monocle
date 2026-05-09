@@ -15,7 +15,9 @@ uninstall:
 	rm -f $(shell go env GOPATH)/bin/monocle
 
 test:
-	go tool gotestsum -- -count=1 -cover -p 1 ./...
+	tmp=$$(mktemp -d); \
+	trap 'rm -rf "$$tmp"' EXIT; \
+	XDG_CONFIG_HOME="$$tmp" go tool gotestsum -- -count=1 -cover -p 1 ./...
 
 check:
 	trivy fs --scanners vuln,secret,misconfig .

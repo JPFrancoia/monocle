@@ -663,7 +663,6 @@ func resolveSocketForWorkDir(socketOverride, workdir string) (string, error) {
 
 func startNewSession(engine core.EngineAPI, repoRoot string) error {
 	opts := core.SessionOptions{
-		Agent:    "claude",
 		RepoRoot: repoRoot,
 	}
 	if _, err := engine.StartSession(opts); err != nil {

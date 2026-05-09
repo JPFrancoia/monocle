@@ -19,6 +19,7 @@ import (
 // path. Cleanup is registered via t.Cleanup.
 func setupEngine(t *testing.T) (*core.Engine, string) {
 	t.Helper()
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config"))
 
 	repoRoot := t.TempDir()
 	// Seed one file so GetChangedFiles returns something deterministic.
