@@ -145,8 +145,8 @@ func TestEngineClient_RoundTrip(t *testing.T) {
 	if path := ec.GetSocketPath(); path != socketPath {
 		t.Errorf("GetSocketPath = %q, want %q", path, socketPath)
 	}
-	if count := ec.GetSubscriberCount(); count != 1 {
-		t.Errorf("GetSubscriberCount = %d, want 1", count)
+	if count := ec.GetSubscriberCount(); count != 0 {
+		t.Errorf("GetSubscriberCount = %d, want 0", count)
 	}
 }
 
@@ -229,5 +229,53 @@ func TestEngineClient_EventBus(t *testing.T) {
 		t.Errorf("received event after unsub: %+v", p)
 	case <-time.After(200 * time.Millisecond):
 		// expected
+	}
+}
+
+func TestEngineClient_EventCallbackCanMakeRequest(t *testing.T) {
+	engine, socketPath := setupEngine(t)
+	repoRoot := engine.GetSession().RepoRoot
+	extra := filepath.Join(repoRoot, "callback-extra.go")
+	if err := os.WriteFile(extra, []byte("package a\n"), 0o644); err != nil {
+		t.Fatalf("seed extra: %v", err)
+	}
+
+	ec, err := NewEngineClient(socketPath)
+	if err != nil {
+		t.Fatalf("new engine client: %v", err)
+	}
+	t.Cleanup(func() { ec.Close() })
+
+	callbackDone := make(chan error, 1)
+	ec.On(core.EventAdditionalFileAdded, func(core.EventPayload) {
+		if session := ec.GetSession(); session == nil {
+			callbackDone <- fmt.Errorf("GetSession returned nil")
+			return
+		}
+		callbackDone <- nil
+	})
+
+	requestDone := make(chan error, 1)
+	go func() {
+		_, err := ec.AddAdditionalPaths([]string{extra})
+		requestDone <- err
+	}()
+
+	select {
+	case err := <-requestDone:
+		if err != nil {
+			t.Fatalf("add additional paths: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("AddAdditionalPaths timed out while event callback made a request")
+	}
+
+	select {
+	case err := <-callbackDone:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("event callback request timed out")
 	}
 }

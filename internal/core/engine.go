@@ -6,8 +6,8 @@ import (
 
 // SubmitResult contains information about the outcome of a review submission.
 type SubmitResult struct {
-	// AgentConnected indicates whether an agent was connected at submit time.
-	// When false, the review was saved but may not have been delivered.
+	// AgentConnected is reserved for full-review push delivery. Current agent
+	// integrations receive notifications only, so submitted reviews remain queued.
 	AgentConnected bool
 }
 

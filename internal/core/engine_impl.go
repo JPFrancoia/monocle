@@ -979,10 +979,9 @@ func (e *Engine) Submit(action types.SubmitAction, body string) (*SubmitResult, 
 
 	formatted := e.formatter.Format(session, session.Comments, action, body)
 
-	// Check if a push-mode agent is connected (subscriber = channel mode)
-	agentConnected := e.server != nil && e.server.SubscriberCount() > 0
-
-	e.feedback.Submit(formatted, agentConnected)
+	// Submit always queues the full review. Event subscribers are notification
+	// channels only; delivery side effects happen when an agent retrieves feedback.
+	e.feedback.Submit(formatted, false)
 
 	// Save submission record
 	now := time.Now()
@@ -994,9 +993,6 @@ func (e *Engine) Submit(action types.SubmitAction, body string) (*SubmitResult, 
 		CommentCount:    formatted.CommentCount,
 		ReviewRound:     session.ReviewRound,
 		SubmittedAt:     now,
-	}
-	if agentConnected {
-		sub.DeliveredAt = &now // Channel delivers immediately
 	}
 	_ = e.database.CreateSubmission(session.ID, sub)
 
@@ -1032,24 +1028,7 @@ func (e *Engine) Submit(action types.SubmitAction, body string) (*SubmitResult, 
 		Status:  formatted.Action,
 	})
 
-	if agentConnected {
-		// Push mode: advance round for a clean slate (channel delivers immediately)
-		e.mu.Lock()
-		_ = e.sessions.AdvanceRound(session)
-		e.mu.Unlock()
-
-		e.feedback.ClearStatus()
-
-		e.emit(EventFeedbackStatusChanged, EventPayload{
-			Kind:   EventFeedbackStatusChanged,
-			Status: "none",
-		})
-		e.emit(EventFileChanged, EventPayload{
-			Kind: EventFileChanged,
-		})
-	}
-
-	return &SubmitResult{AgentConnected: agentConnected}, nil
+	return &SubmitResult{AgentConnected: false}, nil
 }
 
 // buildFeedbackSummary creates a human-readable one-liner for channel notifications.

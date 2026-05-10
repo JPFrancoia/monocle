@@ -12,10 +12,10 @@ import (
 )
 
 type reviewSummaryModel struct {
-	active         bool
-	summary        *types.ReviewSummary
-	agentConnected bool
-	action         types.SubmitAction
+	active          bool
+	summary         *types.ReviewSummary
+	agentConnected  bool
+	action          types.SubmitAction
 	body            string
 	copyToClipboard bool
 	width           int
@@ -347,7 +347,7 @@ func (m reviewSummaryModel) View() string {
 
 	// Delivery status
 	if m.agentConnected {
-		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("Review will be sent immediately"))
+		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Render("Review will be queued and the agent will be notified"))
 	} else {
 		b.WriteString(lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("Review will be queued for delivery"))
 	}

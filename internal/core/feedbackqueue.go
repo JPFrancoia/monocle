@@ -59,8 +59,8 @@ type ReviewStatusInfo struct {
 // and MCP channel/tool feedback retrieval. Supports both non-blocking and
 // blocking wait (pause flow) models, and both push (channel) and queue modes.
 //
-// In push mode (channelDelivered=true), pending is replaced on each submit.
-// In queue mode (channelDelivered=false), reviews accumulate until polled.
+// In normal queue mode, reviews accumulate until polled. The channelDelivered
+// flag is kept for compatibility with older full-delivery push flows.
 type FeedbackQueue struct {
 	mu   sync.Mutex
 	cond *sync.Cond
@@ -90,8 +90,8 @@ func NewFeedbackQueue() *FeedbackQueue {
 // it wakes it to deliver immediately.
 //
 // channelDelivered controls accumulation behavior:
-//   - true (push mode): replaces any pending review (channel delivers immediately)
-//   - false (queue mode): appends to the pending queue
+//   - true: replaces any pending review for legacy full-delivery push flows
+//   - false: appends to the pending queue
 func (fq *FeedbackQueue) Submit(review *FormattedReview, channelDelivered bool) {
 	fq.mu.Lock()
 	defer fq.mu.Unlock()

@@ -71,10 +71,16 @@ type SubmitContentResponse struct {
 	Message string `json:"message,omitempty"`
 }
 
+const (
+	SubscribeClientAgent    = "agent"
+	SubscribeClientFrontend = "frontend"
+)
+
 // SubscribeMsg requests a persistent event subscription on this connection.
 type SubscribeMsg struct {
-	Type   string   `json:"type"`
-	Events []string `json:"events"`
+	Type       string   `json:"type"`
+	Events     []string `json:"events"`
+	ClientKind string   `json:"client_kind,omitempty"`
 }
 
 // SubscribeResponse acknowledges a subscription request.

@@ -160,7 +160,7 @@ func (s *SocketServer) SocketPath() string {
 	return s.socketPath
 }
 
-// SubscriberCount returns the number of active subscriber connections.
+// SubscriberCount returns the number of active agent subscriber connections.
 func (s *SocketServer) SubscriberCount() int {
 	s.subscriberMu.Lock()
 	defer s.subscriberMu.Unlock()
@@ -234,7 +234,8 @@ func (s *SocketServer) handleConnection(conn net.Conn) {
 		return
 	}
 
-	// If the first message is a subscribe request, handle as persistent connection (push mode)
+	// If the first message is a subscribe request, handle as a persistent
+	// bidirectional event connection.
 	if sub, ok := msg.(*protocol.SubscribeMsg); ok {
 		s.handleSubscription(conn, scanner, sub)
 		return
@@ -272,11 +273,12 @@ func (s *SocketServer) handleConnection(conn net.Conn) {
 	_, _ = conn.Write(data)
 }
 
-// handleSubscription manages a persistent subscription connection.
-// It subscribes to requested engine events and pushes notifications,
-// while also accepting request/response messages on the same connection.
+// handleSubscription manages a persistent subscription connection. It
+// subscribes to requested engine events and pushes notifications, while also
+// accepting request/response messages on the same connection.
 func (s *SocketServer) handleSubscription(conn net.Conn, scanner *bufio.Scanner, sub *protocol.SubscribeMsg) {
 	defer conn.Close()
+	isAgentSubscriber := sub.ClientKind != protocol.SubscribeClientFrontend
 
 	// Mutex for serialized writes to the connection
 	var writeMu sync.Mutex
@@ -323,26 +325,31 @@ func (s *SocketServer) handleSubscription(conn net.Conn, scanner *bufio.Scanner,
 		return
 	}
 
-	// Track subscriber connection
-	s.subscriberMu.Lock()
-	s.subscriberCount++
-	count := s.subscriberCount
-	s.subscriberMu.Unlock()
-	s.engine.emit(EventConnectionChanged, EventPayload{
-		Kind:   EventConnectionChanged,
-		Status: fmt.Sprintf("%d", count),
-	})
-
-	// Clean up subscriptions and subscriber count on exit
-	defer func() {
+	if isAgentSubscriber {
+		// Track agent subscriber connections only. Frontend clients subscribe to
+		// mirror TUI events and must not affect feedback delivery state.
 		s.subscriberMu.Lock()
-		s.subscriberCount--
+		s.subscriberCount++
 		count := s.subscriberCount
 		s.subscriberMu.Unlock()
 		s.engine.emit(EventConnectionChanged, EventPayload{
 			Kind:   EventConnectionChanged,
 			Status: fmt.Sprintf("%d", count),
 		})
+	}
+
+	// Clean up subscriptions and subscriber count on exit
+	defer func() {
+		if isAgentSubscriber {
+			s.subscriberMu.Lock()
+			s.subscriberCount--
+			count := s.subscriberCount
+			s.subscriberMu.Unlock()
+			s.engine.emit(EventConnectionChanged, EventPayload{
+				Kind:   EventConnectionChanged,
+				Status: fmt.Sprintf("%d", count),
+			})
+		}
 		for _, unsub := range unsubs {
 			unsub()
 		}

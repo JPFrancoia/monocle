@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -259,6 +260,122 @@ func TestSocketServer_SubscriberCount(t *testing.T) {
 
 	if got := engine.GetSubscriberCount(); got != 0 {
 		t.Errorf("subscriber count after disconnect = %d, want 0", got)
+	}
+}
+
+func TestSocketServer_FrontendSubscriptionDoesNotDeliverReview(t *testing.T) {
+	engine, socketPath := setupTestEngine(t)
+
+	_, err := engine.AddComment(CommentTarget{
+		TargetType: types.TargetFile,
+		TargetRef:  "test.go",
+		LineStart:  1,
+		LineEnd:    1,
+	}, types.CommentIssue, "Fix this")
+	if err != nil {
+		t.Fatalf("add comment: %v", err)
+	}
+
+	conn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	sub := protocol.SubscribeMsg{
+		Type:       protocol.TypeSubscribe,
+		ClientKind: protocol.SubscribeClientFrontend,
+		Events:     []string{string(EventFeedbackSubmitted)},
+	}
+	data, _ := protocol.Encode(&sub)
+	conn.Write(data)
+
+	scanner := bufio.NewScanner(conn)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	if !scanner.Scan() {
+		t.Fatal("no ack")
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if got := engine.GetSubscriberCount(); got != 0 {
+		t.Fatalf("frontend subscriber count = %d, want 0", got)
+	}
+
+	result, err := engine.Submit(types.ActionRequestChanges, "")
+	if err != nil {
+		t.Fatalf("submit: %v", err)
+	}
+	if result.AgentConnected {
+		t.Fatal("frontend subscription should not report immediate delivery")
+	}
+	if got := engine.GetQueuedCount(); got != 1 {
+		t.Fatalf("queued count after submit = %d, want 1", got)
+	}
+
+	subs, err := engine.database.GetSubmissions(engine.GetSession().ID)
+	if err != nil {
+		t.Fatalf("get submissions: %v", err)
+	}
+	if len(subs) != 1 {
+		t.Fatalf("submission count = %d, want 1", len(subs))
+	}
+	if subs[0].DeliveredAt != nil {
+		t.Fatalf("frontend subscription marked review delivered at %v", subs[0].DeliveredAt)
+	}
+
+	conn.SetReadDeadline(time.Now().Add(2 * time.Second))
+	if !scanner.Scan() {
+		t.Fatal("no feedback_submitted notification")
+	}
+	decoded, err := protocol.Decode(scanner.Bytes())
+	if err != nil {
+		t.Fatalf("decode notification: %v", err)
+	}
+	notif, ok := decoded.(*protocol.EventNotification)
+	if !ok {
+		t.Fatalf("expected *EventNotification, got %T", decoded)
+	}
+	if notif.Event != string(EventFeedbackSubmitted) {
+		t.Fatalf("event = %q, want %q", notif.Event, EventFeedbackSubmitted)
+	}
+
+	pollConn, err := net.Dial("unix", socketPath)
+	if err != nil {
+		t.Fatalf("dial poll: %v", err)
+	}
+	defer pollConn.Close()
+	pollMsg := protocol.PollFeedbackMsg{Type: protocol.TypePollFeedback}
+	pollData, _ := protocol.Encode(&pollMsg)
+	pollConn.Write(pollData)
+	pollScanner := bufio.NewScanner(pollConn)
+	pollScanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	if !pollScanner.Scan() {
+		t.Fatal("no poll response")
+	}
+	decoded, err = protocol.Decode(pollScanner.Bytes())
+	if err != nil {
+		t.Fatalf("decode poll response: %v", err)
+	}
+	feedback, ok := decoded.(*protocol.PollFeedbackResponse)
+	if !ok {
+		t.Fatalf("expected *PollFeedbackResponse, got %T", decoded)
+	}
+	if !feedback.HasFeedback {
+		t.Fatal("expected queued feedback")
+	}
+	if !strings.Contains(feedback.Feedback, "Fix this") {
+		t.Fatalf("feedback did not contain submitted comment: %q", feedback.Feedback)
+	}
+	if got := engine.GetQueuedCount(); got != 0 {
+		t.Fatalf("queued count after poll = %d, want 0", got)
+	}
+
+	subs, err = engine.database.GetSubmissions(engine.GetSession().ID)
+	if err != nil {
+		t.Fatalf("get submissions after poll: %v", err)
+	}
+	if subs[0].DeliveredAt == nil {
+		t.Fatal("polling feedback did not mark submission delivered")
 	}
 }
 

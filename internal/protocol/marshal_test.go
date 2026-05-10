@@ -6,8 +6,9 @@ import (
 
 func TestEncodeDecodeSubscribe(t *testing.T) {
 	msg := &SubscribeMsg{
-		Type:   TypeSubscribe,
-		Events: []string{"feedback_submitted", "pause_changed"},
+		Type:       TypeSubscribe,
+		Events:     []string{"feedback_submitted", "pause_changed"},
+		ClientKind: SubscribeClientFrontend,
 	}
 
 	data, err := Encode(msg)
@@ -29,6 +30,9 @@ func TestEncodeDecodeSubscribe(t *testing.T) {
 	}
 	if len(sub.Events) != 2 {
 		t.Errorf("events count = %d, want 2", len(sub.Events))
+	}
+	if sub.ClientKind != SubscribeClientFrontend {
+		t.Errorf("client kind = %q, want %q", sub.ClientKind, SubscribeClientFrontend)
 	}
 }
 

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"sync"
 	"time"
 
@@ -28,6 +29,7 @@ type EngineClient struct {
 	reqMu   sync.Mutex // one request in flight at a time
 	pending chan any   // read loop delivers non-event responses here
 	readErr chan error // terminal read error
+	events  chan *protocol.EventNotification
 
 	subsMu      sync.Mutex
 	subscribers map[core.EventKind]map[int]core.EventCallback
@@ -56,13 +58,15 @@ func NewEngineClient(socketPath string) (*EngineClient, error) {
 		scanner:     scanner,
 		pending:     make(chan any, 1),
 		readErr:     make(chan error, 1),
+		events:      make(chan *protocol.EventNotification, 64),
 		subscribers: make(map[core.EventKind]map[int]core.EventCallback),
 		closed:      make(chan struct{}),
 	}
 
 	// Subscribe to every event kind so the client mirrors all engine events.
 	sub := &protocol.SubscribeMsg{
-		Type: protocol.TypeSubscribe,
+		Type:       protocol.TypeSubscribe,
+		ClientKind: protocol.SubscribeClientFrontend,
 		Events: []string{
 			string(core.EventFileChanged),
 			string(core.EventFeedbackStatusChanged),
@@ -105,6 +109,7 @@ func NewEngineClient(socketPath string) (*EngineClient, error) {
 	}
 
 	go c.readLoop()
+	go c.eventLoop()
 	return c, nil
 }
 
@@ -121,7 +126,11 @@ func (c *EngineClient) readLoop() {
 			continue // best-effort: skip garbage rather than closing the link
 		}
 		if notif, ok := msg.(*protocol.EventNotification); ok {
-			c.dispatchEvent(notif)
+			select {
+			case c.events <- notif:
+			case <-c.closed:
+				return
+			}
 			continue
 		}
 		select {
@@ -141,6 +150,19 @@ func (c *EngineClient) readLoop() {
 	close(c.closed)
 }
 
+func (c *EngineClient) eventLoop() {
+	for {
+		select {
+		case notif := <-c.events:
+			if notif != nil {
+				c.dispatchEvent(notif)
+			}
+		case <-c.closed:
+			return
+		}
+	}
+}
+
 // request sends msg and blocks until the corresponding response arrives. The
 // reqMu lock guarantees one in-flight request at a time, so the order of
 // non-event messages on the pending channel matches the order of sends.
@@ -149,6 +171,7 @@ func (c *EngineClient) request(msg any) (any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("encode: %w", err)
 	}
+	expected := expectedResponseType(msg)
 
 	c.reqMu.Lock()
 	defer c.reqMu.Unlock()
@@ -160,16 +183,56 @@ func (c *EngineClient) request(msg any) (any, error) {
 		return nil, fmt.Errorf("write: %w", werr)
 	}
 
-	select {
-	case resp := <-c.pending:
-		return resp, nil
-	case err := <-c.readErr:
-		return nil, err
-	case <-c.closed:
-		return nil, errors.New("client closed")
-	case <-time.After(DefaultTimeout):
-		return nil, errors.New("timeout waiting for response")
+	timer := time.NewTimer(DefaultTimeout)
+	defer timer.Stop()
+
+	for {
+		select {
+		case resp := <-c.pending:
+			if expected == "" || protocolMessageType(resp) == expected {
+				return resp, nil
+			}
+			// A previous request can time out while its response is still in
+			// flight. Discard stale responses instead of handing them to the next
+			// caller, which would panic on an invalid type assertion.
+			continue
+		case err := <-c.readErr:
+			return nil, err
+		case <-c.closed:
+			return nil, errors.New("client closed")
+		case <-timer.C:
+			return nil, errors.New("timeout waiting for response")
+		}
 	}
+}
+
+func expectedResponseType(msg any) string {
+	msgType := protocolMessageType(msg)
+	if msgType == "" {
+		return ""
+	}
+	return msgType + "_response"
+}
+
+func protocolMessageType(msg any) string {
+	v := reflect.ValueOf(msg)
+	if !v.IsValid() {
+		return ""
+	}
+	if v.Kind() == reflect.Pointer {
+		if v.IsNil() {
+			return ""
+		}
+		v = v.Elem()
+	}
+	if v.Kind() != reflect.Struct {
+		return ""
+	}
+	field := v.FieldByName("Type")
+	if !field.IsValid() || field.Kind() != reflect.String {
+		return ""
+	}
+	return field.String()
 }
 
 func (c *EngineClient) dispatchEvent(notif *protocol.EventNotification) {

@@ -81,7 +81,7 @@ type additionalFileAddedMsg struct {
 type connectionChangedMsg struct {
 	count     int
 	agentName string
-	mode      string // "queue" for queue-mode connections, subscriber count for push
+	mode      string // "queue" for queue-mode notification connections
 }
 
 // requestContentDiffMsg requests async computation of a content item diff.
@@ -1133,9 +1133,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusBar.baseRef = m.displayBaseRef(session)
 		}
 
-		// If no push-mode agent was connected, feedback is queued for pull delivery.
-		// Clear comments (they're frozen in the submission) but don't advance
-		// the round or clear content items — that happens when the agent pulls.
+		// Feedback is queued for pull delivery. Clear comments (they're frozen in
+		// the submission) but don't advance the round or clear content items —
+		// that happens when the agent pulls.
 		if !msg.agentConnected {
 			count := m.engine.GetQueuedCount()
 			if count == 1 {
