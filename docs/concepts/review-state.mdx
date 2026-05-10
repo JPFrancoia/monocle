@@ -27,16 +27,13 @@ Each round builds on the last. Monocle remembers what the code looked like when 
 
 Every file in the sidebar has a reviewed state: either reviewed (green checkmark) or unreviewed (empty circle). You toggle this with `r`, and filter the sidebar with `/` to show only unreviewed or reviewed files.
 
-There are two layers to reviewed state:
+When you press `r`, monocle records the file content you reviewed. If that file changes again, monocle automatically clears the reviewed mark so it shows up in the unreviewed filter again.
 
-- **Draft** — while you're working through files, pressing `r` is a working indicator. It helps you track your progress during a round. The sidebar filter works with it immediately.
-- **Committed** — when you submit a review, monocle captures a snapshot. This snapshot is the "real" reviewed state that drives automatic change detection on the next round.
-
-Until you submit, reviewed marks are ephemeral. They help you work, but they don't affect what happens next round.
+When you submit a review, monocle also captures a full snapshot for the round. That snapshot lets monocle compare the next set of agent changes against the state you submitted.
 
 ## Snapshots and change detection
 
-When you submit a review with **Request Changes**, monocle creates a **snapshot** — a record of every file's content at that moment. On the next round, monocle compares each file against the snapshot:
+When you submit a review with **Request Changes**, monocle creates a **snapshot** — a record of every file's content at that moment. On the next round, monocle compares each file against either your latest manual reviewed mark or the snapshot:
 
 - **File changed** since the snapshot — automatically marked as unreviewed
 - **File unchanged** since the snapshot — stays marked as reviewed

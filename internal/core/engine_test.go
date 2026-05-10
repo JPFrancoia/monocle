@@ -482,6 +482,7 @@ func TestMarkReviewedAndUnmark(t *testing.T) {
 	e := &Engine{
 		feedback:    NewFeedbackQueue(),
 		database:    database,
+		git:         &gitStub{hashObjectDrys: map[string]string{"main.go": "reviewed_sha"}},
 		cfg:         &types.Config{ReviewTracking: true},
 		subscribers: make(map[EventKind]map[int]EventCallback),
 	}
@@ -518,6 +519,15 @@ func TestMarkReviewedAndUnmark(t *testing.T) {
 		if f.Path == "main.go" && !f.Reviewed {
 			t.Error("expected main.go ChangedFile.Reviewed to be true")
 		}
+		if f.Path == "main.go" && f.ReviewedBlobSHA != "reviewed_sha" {
+			t.Errorf("expected main.go reviewed blob sha, got %q", f.ReviewedBlobSHA)
+		}
+	}
+	dbFiles, _ := database.GetChangedFiles("sess-1")
+	for _, f := range dbFiles {
+		if f.Path == "main.go" && f.ReviewedBlobSHA != "reviewed_sha" {
+			t.Errorf("expected DB reviewed blob sha, got %q", f.ReviewedBlobSHA)
+		}
 	}
 
 	// Unmark main.go
@@ -534,6 +544,9 @@ func TestMarkReviewedAndUnmark(t *testing.T) {
 	for _, f := range e.current.ChangedFiles {
 		if f.Path == "main.go" && f.Reviewed {
 			t.Error("expected main.go ChangedFile.Reviewed to be false after unmark")
+		}
+		if f.Path == "main.go" && f.ReviewedBlobSHA != "" {
+			t.Errorf("expected main.go reviewed blob sha to be cleared, got %q", f.ReviewedBlobSHA)
 		}
 	}
 }
@@ -1498,6 +1511,113 @@ func TestAutoUnmarkChangedFiles_ContentChanged(t *testing.T) {
 	}
 }
 
+func TestAutoUnmarkChangedFiles_ManualReviewedFingerprintSurvivesSnapshotMismatch(t *testing.T) {
+	database, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	stub := &gitStub{
+		repoRoot: "/tmp/repo",
+		hashObjectDrys: map[string]string{
+			"main.go": "reviewed_sha",
+		},
+	}
+	e := &Engine{
+		feedback:    NewFeedbackQueue(),
+		database:    database,
+		git:         stub,
+		cfg:         &types.Config{ReviewTracking: true},
+		subscribers: make(map[EventKind]map[int]EventCallback),
+	}
+
+	session := &types.ReviewSession{
+		ID:           "sess-1",
+		FileStatuses: map[string]bool{"main.go": true},
+	}
+	files := []types.ChangedFile{
+		{Path: "main.go", Status: types.FileModified, Reviewed: true, ReviewedBlobSHA: "reviewed_sha"},
+	}
+	snapshot := &types.ReviewSnapshot{
+		Files: []types.SnapshotFile{
+			{Path: "main.go", BlobSHA: "older_snapshot_sha"},
+		},
+	}
+
+	e.autoUnmarkChangedFiles(session, files, snapshot)
+
+	if !files[0].Reviewed {
+		t.Error("expected manually reviewed content to stay reviewed")
+	}
+	if !session.FileStatuses["main.go"] {
+		t.Error("expected file status to stay reviewed")
+	}
+}
+
+func TestAutoUnmarkChangedFiles_ManualReviewedFingerprintClearsAfterChange(t *testing.T) {
+	database, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+
+	stub := &gitStub{
+		repoRoot: "/tmp/repo",
+		hashObjectDrys: map[string]string{
+			"main.go": "new_sha",
+		},
+	}
+	e := &Engine{
+		feedback:    NewFeedbackQueue(),
+		database:    database,
+		git:         stub,
+		cfg:         &types.Config{ReviewTracking: true},
+		subscribers: make(map[EventKind]map[int]EventCallback),
+	}
+
+	now := time.Now()
+	session := &types.ReviewSession{
+		ID:           "sess-1",
+		FileStatuses: map[string]bool{"main.go": true},
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	if err := database.CreateSession(session); err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+	files := []types.ChangedFile{
+		{Path: "main.go", Status: types.FileModified, Reviewed: true, ReviewedBlobSHA: "reviewed_sha"},
+	}
+	if err := database.UpsertChangedFile(session.ID, &files[0]); err != nil {
+		t.Fatalf("upsert changed file: %v", err)
+	}
+	snapshot := &types.ReviewSnapshot{
+		Files: []types.SnapshotFile{
+			{Path: "main.go", BlobSHA: "older_snapshot_sha"},
+		},
+	}
+
+	e.autoUnmarkChangedFiles(session, files, snapshot)
+
+	if files[0].Reviewed {
+		t.Error("expected changed content to be unreviewed")
+	}
+	if files[0].ReviewedBlobSHA != "" {
+		t.Errorf("expected reviewed blob sha to be cleared, got %q", files[0].ReviewedBlobSHA)
+	}
+	if session.FileStatuses["main.go"] {
+		t.Error("expected file status to be unreviewed")
+	}
+	dbFiles, _ := database.GetChangedFiles(session.ID)
+	if len(dbFiles) != 1 {
+		t.Fatalf("expected 1 DB file, got %d", len(dbFiles))
+	}
+	if dbFiles[0].Reviewed || dbFiles[0].ReviewedBlobSHA != "" {
+		t.Errorf("expected DB file to be unreviewed with empty sha, got %+v", dbFiles[0])
+	}
+}
+
 func TestAutoUnmarkChangedFiles_NewFileSinceSnapshot(t *testing.T) {
 	database, err := db.Open(":memory:")
 	if err != nil {
@@ -1558,7 +1678,7 @@ func TestAutoUnmarkChangedFiles_DeletedFile(t *testing.T) {
 		FileStatuses: make(map[string]bool),
 	}
 	files := []types.ChangedFile{
-		{Path: "gone.go", Status: types.FileDeleted, Reviewed: true},
+		{Path: "gone.go", Status: types.FileDeleted, Reviewed: true, ReviewedBlobSHA: "reviewed_sha"},
 	}
 
 	snapshot := &types.ReviewSnapshot{
@@ -1571,6 +1691,9 @@ func TestAutoUnmarkChangedFiles_DeletedFile(t *testing.T) {
 
 	if files[0].Reviewed {
 		t.Error("expected deleted file to be unmarked")
+	}
+	if files[0].ReviewedBlobSHA != "" {
+		t.Errorf("expected deleted file reviewed blob sha to be cleared, got %q", files[0].ReviewedBlobSHA)
 	}
 }
 
@@ -1997,7 +2120,7 @@ func TestFilesRelativeToSnapshot_RevertedFilesAppear(t *testing.T) {
 		repoRoot: "/tmp/repo",
 		// HashObjectDry for reverted files returns the base SHA (differs from snapshot)
 		hashObjectDrys: map[string]string{
-			"reverted.go": "base_sha",
+			"reverted.go":      "base_sha",
 			"still_changed.go": "new_sha",
 		},
 	}

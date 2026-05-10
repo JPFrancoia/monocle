@@ -60,9 +60,10 @@ type RepoInfo struct {
 }
 
 type ChangedFile struct {
-	Path     string
-	Status   FileChangeStatus
-	Reviewed bool
+	Path            string
+	Status          FileChangeStatus
+	Reviewed        bool
+	ReviewedBlobSHA string
 }
 
 type AdditionalFile struct {

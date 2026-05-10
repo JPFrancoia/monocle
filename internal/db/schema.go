@@ -5,7 +5,7 @@ import (
 	"fmt"
 )
 
-const schemaVersion = 8
+const schemaVersion = 9
 
 const dropSQL = `
 DROP TABLE IF EXISTS review_snapshot_files;
@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS changed_files (
 	path TEXT NOT NULL,
 	status TEXT NOT NULL,
 	reviewed INTEGER NOT NULL DEFAULT 0,
+	reviewed_blob_sha TEXT NOT NULL DEFAULT '',
 	UNIQUE(session_id, path)
 );
 
@@ -172,9 +173,11 @@ func Migrate(db *sql.DB) error {
 		// Verify schema integrity — check that key columns exist.
 		var colCount int
 		err = db.QueryRow(
-			"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'repo_root'",
+			`SELECT
+				(SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'repo_root') +
+				(SELECT COUNT(*) FROM pragma_table_info('changed_files') WHERE name = 'reviewed_blob_sha')`,
 		).Scan(&colCount)
-		if err != nil || colCount == 1 {
+		if err != nil || colCount == 2 {
 			return nil // schema looks good
 		}
 		// Schema is stale — fall through to recreate.

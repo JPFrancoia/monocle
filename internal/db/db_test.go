@@ -100,13 +100,28 @@ func TestChangedFiles(t *testing.T) {
 		t.Errorf("unexpected files: %+v", files)
 	}
 
-	if err := d.MarkFileReviewed("sess-1", "main.go", true); err != nil {
+	if err := d.MarkFileReviewedAtSHA("sess-1", "main.go", "sha123"); err != nil {
 		t.Fatalf("mark: %v", err)
 	}
 
 	files, _ = d.GetChangedFiles("sess-1")
 	if !files[0].Reviewed {
 		t.Error("expected reviewed")
+	}
+	if files[0].ReviewedBlobSHA != "sha123" {
+		t.Errorf("expected reviewed blob sha sha123, got %q", files[0].ReviewedBlobSHA)
+	}
+
+	if err := d.MarkFileReviewed("sess-1", "main.go", false); err != nil {
+		t.Fatalf("unmark: %v", err)
+	}
+
+	files, _ = d.GetChangedFiles("sess-1")
+	if files[0].Reviewed {
+		t.Error("expected unreviewed")
+	}
+	if files[0].ReviewedBlobSHA != "" {
+		t.Errorf("expected reviewed blob sha to be cleared, got %q", files[0].ReviewedBlobSHA)
 	}
 }
 

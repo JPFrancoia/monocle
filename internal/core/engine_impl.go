@@ -704,7 +704,11 @@ func (e *Engine) MarkReviewed(path string) error {
 		}
 	}
 
-	if err := e.database.MarkFileReviewed(e.current.ID, path, true); err != nil {
+	reviewedSHA := ""
+	if shas := e.hashPaths([]string{path}); len(shas) > 0 {
+		reviewedSHA = shas[path]
+	}
+	if err := e.database.MarkFileReviewedAtSHA(e.current.ID, path, reviewedSHA); err != nil {
 		return fmt.Errorf("mark reviewed: %w", err)
 	}
 
@@ -712,6 +716,7 @@ func (e *Engine) MarkReviewed(path string) error {
 	for i := range e.current.ChangedFiles {
 		if e.current.ChangedFiles[i].Path == path {
 			e.current.ChangedFiles[i].Reviewed = true
+			e.current.ChangedFiles[i].ReviewedBlobSHA = reviewedSHA
 			break
 		}
 	}
@@ -746,6 +751,7 @@ func (e *Engine) UnmarkReviewed(path string) error {
 	for i := range e.current.ChangedFiles {
 		if e.current.ChangedFiles[i].Path == path {
 			e.current.ChangedFiles[i].Reviewed = false
+			e.current.ChangedFiles[i].ReviewedBlobSHA = ""
 			break
 		}
 	}
@@ -864,6 +870,7 @@ func (e *Engine) ResetAllReviewed() error {
 
 	for i := range e.current.ChangedFiles {
 		e.current.ChangedFiles[i].Reviewed = false
+		e.current.ChangedFiles[i].ReviewedBlobSHA = ""
 	}
 	for i := range e.current.AdditionalFiles {
 		e.current.AdditionalFiles[i].Reviewed = false
@@ -893,8 +900,20 @@ func (e *Engine) MarkAllReviewed() error {
 		return fmt.Errorf("mark all reviewed: %w", err)
 	}
 
+	var paths []string
+	for _, f := range e.current.ChangedFiles {
+		if f.Status != types.FileDeleted {
+			paths = append(paths, f.Path)
+		}
+	}
+	reviewedSHAs := e.hashPaths(paths)
 	for i := range e.current.ChangedFiles {
 		e.current.ChangedFiles[i].Reviewed = true
+		reviewedSHA := reviewedSHAs[e.current.ChangedFiles[i].Path]
+		e.current.ChangedFiles[i].ReviewedBlobSHA = reviewedSHA
+		if err := e.database.MarkFileReviewedAtSHA(e.current.ID, e.current.ChangedFiles[i].Path, reviewedSHA); err != nil {
+			return fmt.Errorf("mark file reviewed: %w", err)
+		}
 	}
 	for i := range e.current.AdditionalFiles {
 		e.current.AdditionalFiles[i].Reviewed = true
@@ -1417,8 +1436,8 @@ func (e *Engine) hashPaths(paths []string) map[string]string {
 	return shas
 }
 
-// autoUnmarkChangedFiles compares current files against the latest snapshot and
-// marks files as unreviewed if their content changed since the snapshot.
+// autoUnmarkChangedFiles marks files as unreviewed when their content changed
+// after either the manual reviewed fingerprint or the latest review snapshot.
 func (e *Engine) autoUnmarkChangedFiles(session *types.ReviewSession, files []types.ChangedFile, snapshot *types.ReviewSnapshot) {
 	snapshotBySHA := make(map[string]string)
 	for _, sf := range snapshot.Files {
@@ -1428,37 +1447,59 @@ func (e *Engine) autoUnmarkChangedFiles(session *types.ReviewSession, files []ty
 	}
 
 	var toHash []string
+	toHashSet := make(map[string]bool)
 	for _, f := range files {
-		if f.Status == types.FileDeleted {
+		if !f.Reviewed || f.Status == types.FileDeleted {
+			continue
+		}
+		if f.ReviewedBlobSHA != "" {
+			toHashSet[f.Path] = true
 			continue
 		}
 		if _, ok := snapshotBySHA[f.Path]; ok {
-			toHash = append(toHash, f.Path)
+			toHashSet[f.Path] = true
 		}
+	}
+	for path := range toHashSet {
+		toHash = append(toHash, path)
 	}
 	currentSHAs := e.hashPaths(toHash)
 
 	for i := range files {
 		f := &files[i]
-		snapshotSHA, inSnapshot := snapshotBySHA[f.Path]
+		if !f.Reviewed {
+			continue
+		}
+		if f.Status == types.FileDeleted {
+			// File deleted — mark unreviewed
+			f.Reviewed = false
+			f.ReviewedBlobSHA = ""
+			session.FileStatuses[f.Path] = false
+			_ = e.database.MarkFileReviewed(session.ID, f.Path, false)
+			continue
+		}
 
-		if !inSnapshot {
-			// New file since snapshot — should be unreviewed
-			if f.Reviewed {
+		if f.ReviewedBlobSHA != "" {
+			currentSHA, ok := currentSHAs[f.Path]
+			if !ok {
+				continue // can't hash, skip
+			}
+			if currentSHA != f.ReviewedBlobSHA {
 				f.Reviewed = false
+				f.ReviewedBlobSHA = ""
 				session.FileStatuses[f.Path] = false
 				_ = e.database.MarkFileReviewed(session.ID, f.Path, false)
 			}
 			continue
 		}
 
-		if f.Status == types.FileDeleted {
-			// File deleted — mark unreviewed
-			if f.Reviewed {
-				f.Reviewed = false
-				session.FileStatuses[f.Path] = false
-				_ = e.database.MarkFileReviewed(session.ID, f.Path, false)
-			}
+		snapshotSHA, inSnapshot := snapshotBySHA[f.Path]
+
+		if !inSnapshot {
+			// New file since snapshot — should be unreviewed
+			f.Reviewed = false
+			session.FileStatuses[f.Path] = false
+			_ = e.database.MarkFileReviewed(session.ID, f.Path, false)
 			continue
 		}
 
@@ -1469,11 +1510,9 @@ func (e *Engine) autoUnmarkChangedFiles(session *types.ReviewSession, files []ty
 
 		if currentSHA != snapshotSHA {
 			// Content changed since snapshot — unmark reviewed
-			if f.Reviewed {
-				f.Reviewed = false
-				session.FileStatuses[f.Path] = false
-				_ = e.database.MarkFileReviewed(session.ID, f.Path, false)
-			}
+			f.Reviewed = false
+			session.FileStatuses[f.Path] = false
+			_ = e.database.MarkFileReviewed(session.ID, f.Path, false)
 		}
 	}
 }

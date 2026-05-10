@@ -105,10 +105,10 @@ func (d *DB) ListSessions(repoRoot string, limit int) ([]types.SessionSummary, e
 // UpsertChangedFile inserts or updates a changed file record.
 func (d *DB) UpsertChangedFile(sessionID string, f *types.ChangedFile) error {
 	_, err := d.Exec(
-		`INSERT INTO changed_files (session_id, path, status, reviewed)
-		 VALUES (?, ?, ?, ?)
+		`INSERT INTO changed_files (session_id, path, status, reviewed, reviewed_blob_sha)
+		 VALUES (?, ?, ?, ?, ?)
 		 ON CONFLICT(session_id, path) DO UPDATE SET status = excluded.status`,
-		sessionID, f.Path, string(f.Status), boolToInt(f.Reviewed),
+		sessionID, f.Path, string(f.Status), boolToInt(f.Reviewed), f.ReviewedBlobSHA,
 	)
 	return err
 }
@@ -116,7 +116,7 @@ func (d *DB) UpsertChangedFile(sessionID string, f *types.ChangedFile) error {
 // GetChangedFiles returns all changed files for a session.
 func (d *DB) GetChangedFiles(sessionID string) ([]types.ChangedFile, error) {
 	rows, err := d.Query(
-		`SELECT path, status, reviewed FROM changed_files WHERE session_id = ? ORDER BY path`, sessionID,
+		`SELECT path, status, reviewed, reviewed_blob_sha FROM changed_files WHERE session_id = ? ORDER BY path`, sessionID,
 	)
 	if err != nil {
 		return nil, err
@@ -128,7 +128,7 @@ func (d *DB) GetChangedFiles(sessionID string) ([]types.ChangedFile, error) {
 		var f types.ChangedFile
 		var status string
 		var reviewed int
-		if err := rows.Scan(&f.Path, &status, &reviewed); err != nil {
+		if err := rows.Scan(&f.Path, &status, &reviewed, &f.ReviewedBlobSHA); err != nil {
 			return nil, err
 		}
 		f.Status = types.FileChangeStatus(status)
@@ -141,8 +141,17 @@ func (d *DB) GetChangedFiles(sessionID string) ([]types.ChangedFile, error) {
 // MarkFileReviewed sets the reviewed flag for a file.
 func (d *DB) MarkFileReviewed(sessionID, path string, reviewed bool) error {
 	_, err := d.Exec(
-		`UPDATE changed_files SET reviewed = ? WHERE session_id = ? AND path = ?`,
+		`UPDATE changed_files SET reviewed = ?, reviewed_blob_sha = '' WHERE session_id = ? AND path = ?`,
 		boolToInt(reviewed), sessionID, path,
+	)
+	return err
+}
+
+// MarkFileReviewedAtSHA marks a file as reviewed at a specific content hash.
+func (d *DB) MarkFileReviewedAtSHA(sessionID, path, reviewedBlobSHA string) error {
+	_, err := d.Exec(
+		`UPDATE changed_files SET reviewed = 1, reviewed_blob_sha = ? WHERE session_id = ? AND path = ?`,
+		reviewedBlobSHA, sessionID, path,
 	)
 	return err
 }
@@ -461,7 +470,7 @@ func (d *DB) DeleteAdditionalFiles(sessionID string) error {
 // MarkAllReviewed sets the reviewed flag on all files, content items, and additional files for a session.
 func (d *DB) MarkAllReviewed(sessionID string) error {
 	for _, query := range []string{
-		`UPDATE changed_files SET reviewed = 1 WHERE session_id = ?`,
+		`UPDATE changed_files SET reviewed = 1, reviewed_blob_sha = '' WHERE session_id = ?`,
 		`UPDATE content_items SET reviewed = 1 WHERE session_id = ?`,
 		`UPDATE additional_files SET reviewed = 1 WHERE session_id = ?`,
 	} {
@@ -475,7 +484,7 @@ func (d *DB) MarkAllReviewed(sessionID string) error {
 // ResetAllReviewed resets the reviewed flag on all files, content items, and additional files for a session.
 func (d *DB) ResetAllReviewed(sessionID string) error {
 	for _, query := range []string{
-		`UPDATE changed_files SET reviewed = 0 WHERE session_id = ?`,
+		`UPDATE changed_files SET reviewed = 0, reviewed_blob_sha = '' WHERE session_id = ?`,
 		`UPDATE content_items SET reviewed = 0 WHERE session_id = ?`,
 		`UPDATE additional_files SET reviewed = 0 WHERE session_id = ?`,
 	} {
@@ -618,4 +627,3 @@ func boolToInt(b bool) int {
 	}
 	return 0
 }
-

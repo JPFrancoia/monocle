@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/josephschmitt/monocle/internal/db"
 	"github.com/josephschmitt/monocle/internal/types"
-	"github.com/google/uuid"
 )
 
 // SessionManager handles session lifecycle operations.
@@ -106,13 +106,16 @@ func (sm *SessionManager) RefreshChangedFiles(session *types.ReviewSession) ([]t
 	// Read reviewed state from DB (source of truth) rather than in-memory
 	// session.ChangedFiles, which can be stale during concurrent submit.
 	dbFiles, _ := sm.db.GetChangedFiles(session.ID)
-	existingStatus := make(map[string]bool, len(dbFiles))
+	existingStatus := make(map[string]types.ChangedFile, len(dbFiles))
 	for _, f := range dbFiles {
-		existingStatus[f.Path] = f.Reviewed
+		existingStatus[f.Path] = f
 	}
 
 	for i := range files {
-		files[i].Reviewed = existingStatus[files[i].Path]
+		if existing, ok := existingStatus[files[i].Path]; ok {
+			files[i].Reviewed = existing.Reviewed
+			files[i].ReviewedBlobSHA = existing.ReviewedBlobSHA
+		}
 		if err := sm.db.UpsertChangedFile(session.ID, &files[i]); err != nil {
 			return nil, fmt.Errorf("upsert file %s: %w", files[i].Path, err)
 		}
