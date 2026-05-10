@@ -2906,7 +2906,7 @@ func (m appModel) renderTitleBar() string {
 			Render("FOCUS MODE")
 	}
 
-	if context := repoTitleContext(m.repoInfo); context != "" {
+	if context := m.titleBarContext(); context != "" {
 		available := m.width - lipgloss.Width(title) - lipgloss.Width(badge)
 		if badge != "" {
 			available--
@@ -2924,6 +2924,42 @@ func (m appModel) renderTitleBar() string {
 		title += " " + badge
 	}
 	return lipgloss.NewStyle().Width(m.width).Render(title)
+}
+
+// titleBarContext formats the repository and selected file context for display.
+func (m appModel) titleBarContext() string {
+	repoContext := repoTitleContext(m.repoInfo)
+	path := m.selectedTitlePath()
+	if repoContext == "" {
+		return path
+	}
+	if path == "" {
+		return repoContext
+	}
+	return repoContext + "  " + path
+}
+
+// selectedTitlePath returns the file path to show in the title bar.
+func (m appModel) selectedTitlePath() string {
+	if !m.sidebarHidden && m.focus == focusSidebar {
+		if f := m.sidebar.selectedFile(); f != nil {
+			if path := strings.TrimSpace(f.Path); path != "" {
+				return path
+			}
+		}
+		if af := m.sidebar.selectedAdditionalFile(); af != nil {
+			if path := strings.TrimSpace(af.Path); path != "" {
+				return path
+			}
+		}
+	}
+	if m.diffView.additionalFilePath != "" {
+		return strings.TrimSpace(m.diffView.additionalFilePath)
+	}
+	if m.diffView.path != "" && !m.diffView.isViewingContentItem() {
+		return strings.TrimSpace(m.diffView.path)
+	}
+	return ""
 }
 
 // repoTitleContext formats repository context for display in the title bar.

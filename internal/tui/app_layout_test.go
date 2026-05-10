@@ -251,6 +251,63 @@ func TestTitleBarShowsRepoAndBranch(t *testing.T) {
 	}
 }
 
+func TestTitleBarShowsSelectedFilePath(t *testing.T) {
+	m := NewApp(nil)
+	m.width = 160
+	m.repoInfo = types.RepoInfo{Name: "monocle", Branch: "main"}
+	m.sidebar.files = []types.ChangedFile{{Path: "internal/tui/very/long/path/app_layout_test.go"}}
+	m.sidebar.cursor = 0
+
+	view := m.renderTitleBar()
+	if !strings.Contains(view, "monocle → main  internal/tui/very/long/path/app_layout_test.go") {
+		t.Fatalf("expected repo, branch, and selected path in title bar, got %q", view)
+	}
+}
+
+func TestSelectedTitlePathUsesActiveDiffWhenSidebarHidden(t *testing.T) {
+	m := NewApp(nil)
+	m.sidebarHidden = true
+	m.sidebar.files = []types.ChangedFile{{Path: "internal/tui/sidebar.go"}}
+	m.diffView.path = "internal/tui/app.go"
+
+	if got := m.selectedTitlePath(); got != "internal/tui/app.go" {
+		t.Fatalf("selectedTitlePath = %q, want active diff path", got)
+	}
+}
+
+func TestSelectedTitlePathUsesActiveDiffWhenMainFocused(t *testing.T) {
+	m := NewApp(nil)
+	m.focus = focusMain
+	m.sidebar.files = []types.ChangedFile{{Path: "internal/tui/sidebar.go"}}
+	m.diffView.path = "internal/tui/app.go"
+
+	if got := m.selectedTitlePath(); got != "internal/tui/app.go" {
+		t.Fatalf("selectedTitlePath = %q, want active diff path", got)
+	}
+}
+
+func TestSelectedTitlePathUsesAdditionalFile(t *testing.T) {
+	m := NewApp(nil)
+	m.sidebar.additionalFiles = []types.AdditionalFile{{Path: "/tmp/monocle-extra-file.md", Name: "monocle-extra-file.md"}}
+	m.sidebar.cursor = 0
+
+	if got := m.selectedTitlePath(); got != "/tmp/monocle-extra-file.md" {
+		t.Fatalf("selectedTitlePath = %q, want additional file path", got)
+	}
+}
+
+func TestSelectedTitlePathOmitsContentItems(t *testing.T) {
+	m := NewApp(nil)
+	m.sidebar.contentItems = []types.ContentItem{{ID: "plan-1", Title: "Implementation Plan"}}
+	m.sidebar.cursor = 0
+	m.diffView.contentID = "plan-1"
+	m.diffView.path = "content.md"
+
+	if got := m.selectedTitlePath(); got != "" {
+		t.Fatalf("selectedTitlePath = %q, want no file path for content item", got)
+	}
+}
+
 // TestRepoTitleContextOmitsEmptyBranch verifies non-git mode avoids branch UI.
 func TestRepoTitleContextOmitsEmptyBranch(t *testing.T) {
 	context := repoTitleContext(types.RepoInfo{Root: "/tmp/project"})
