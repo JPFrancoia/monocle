@@ -1544,6 +1544,7 @@ func (m appModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	key := msg.String()
 	km := m.keys
+	reviewedKey := Matches(key, km.Reviewed) && (!isSpaceKey(key) || m.focus == focusSidebar)
 
 	// Check for pane-number shortcuts (1, 2, etc.)
 	if pane, ok := km.FocusPaneN[key]; ok {
@@ -1627,7 +1628,7 @@ func (m appModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.diffView, cmd = m.diffView.Update(msg)
 		return m, cmd
 
-	case Matches(key, km.Reviewed):
+	case reviewedKey:
 		if !m.sidebar.reviewTracking {
 			return m, nil
 		}

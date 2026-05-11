@@ -3,8 +3,27 @@ package tui
 import (
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
+
 	"github.com/josephschmitt/monocle/internal/types"
 )
+
+func TestDefaultReviewedKeyIncludesSpace(t *testing.T) {
+	keys := DefaultKeyMap()
+
+	if !Matches("r", keys.Reviewed) {
+		t.Fatal("expected reviewed action to match r")
+	}
+	if !Matches("space", keys.Reviewed) {
+		t.Fatal("expected reviewed action to match Space")
+	}
+	if !Matches(" ", keys.Reviewed) {
+		t.Fatal("expected reviewed action to match literal Space")
+	}
+	if got := Label(keys.Reviewed); got != "r/Space" {
+		t.Fatalf("expected reviewed label r/Space, got %q", got)
+	}
+}
 
 func TestCycleReviewFilter_TrackingEnabled(t *testing.T) {
 	keys := DefaultKeyMap()
@@ -189,6 +208,52 @@ func TestReviewedKeyNoop_TrackingDisabled(t *testing.T) {
 	// File should remain unreviewed
 	if len(app.sidebar.files) > 0 && app.sidebar.files[0].Reviewed {
 		t.Error("expected file to remain unreviewed when tracking is disabled")
+	}
+}
+
+func TestSpaceReviewedKeyWorksInSidebar(t *testing.T) {
+	engine := &stubEngine{
+		cfg: &types.Config{ReviewTracking: true},
+		session: &types.ReviewSession{
+			ID: "test",
+			ChangedFiles: []types.ChangedFile{
+				{Path: "a.go", Reviewed: false},
+			},
+		},
+	}
+	m := NewApp(engine)
+	m.width = 120
+	m.height = 40
+	m.sidebar.files = engine.session.ChangedFiles
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if cmd == nil {
+		t.Fatal("expected Space to toggle reviewed state from the sidebar")
+	}
+}
+
+func TestSpaceReviewedKeyFallsThroughInMainPane(t *testing.T) {
+	engine := &stubEngine{
+		cfg: &types.Config{ReviewTracking: true},
+		session: &types.ReviewSession{
+			ID: "test",
+			ChangedFiles: []types.ChangedFile{
+				{Path: "a.go", Reviewed: false},
+			},
+		},
+	}
+	m := NewApp(engine)
+	m.width = 120
+	m.height = 40
+	m.sidebar.files = engine.session.ChangedFiles
+	m.diffView.path = "a.go"
+	m.focus = focusMain
+	m.sidebar.focused = false
+	m.diffView.focused = true
+
+	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
+	if cmd != nil {
+		t.Fatal("expected Space to fall through to the main pane instead of toggling reviewed state")
 	}
 }
 

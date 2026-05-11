@@ -16,20 +16,20 @@ type KeyMap struct {
 	Select   []string
 
 	// Pane focus
-	FocusSwap      []string
-	FocusPaneN     map[string]int // key → pane number (1=sidebar, 2=diff)
-	ToggleSidebar  []string
+	FocusSwap     []string
+	FocusPaneN    map[string]int // key → pane number (1=sidebar, 2=diff)
+	ToggleSidebar []string
 
 	// Diff view
-	ScrollDown  []string
-	ScrollUp    []string
-	ScrollLeft  []string
-	ScrollRight []string
+	ScrollDown      []string
+	ScrollUp        []string
+	ScrollLeft      []string
+	ScrollRight     []string
 	ScrollHome      []string
 	ScrollFirstChar []string
 	ScrollEnd       []string
-	Wrap        []string
-	ToggleDiff  []string
+	Wrap            []string
+	ToggleDiff      []string
 
 	// Sidebar
 	TreeMode       []string
@@ -40,14 +40,14 @@ type KeyMap struct {
 	FilterReviewed []string
 
 	// Review actions
-	Comment      []string
-	FileComment  []string
-	Suggest      []string
-	Visual       []string
-	Reviewed     []string
-	Submit       []string
-	Pause        []string
-	ClearReview  []string
+	Comment         []string
+	FileComment     []string
+	Suggest         []string
+	Visual          []string
+	Reviewed        []string
+	Submit          []string
+	Pause           []string
+	ClearReview     []string
 	DismissArtifact []string
 	ToggleFocusMode []string
 
@@ -56,10 +56,10 @@ type KeyMap struct {
 	BaseRef          []string
 	ArtifactVersions []string
 	CycleLayout      []string
-	Refresh      []string
-	Help         []string
-	Quit         []string
-	CommandMode  []string
+	Refresh          []string
+	Help             []string
+	Quit             []string
+	CommandMode      []string
 
 	// Wizard (register TUI)
 	WizardAdvance []string
@@ -84,15 +84,15 @@ func DefaultKeyMap() KeyMap {
 		FocusPaneN:    map[string]int{"1": 1, "2": 2},
 		ToggleSidebar: []string{"\\"},
 
-		ScrollDown:  []string{"J"},
-		ScrollUp:    []string{"K"},
-		ScrollLeft:  []string{"H"},
-		ScrollRight: []string{"L"},
+		ScrollDown:      []string{"J"},
+		ScrollUp:        []string{"K"},
+		ScrollLeft:      []string{"H"},
+		ScrollRight:     []string{"L"},
 		ScrollHome:      []string{"0"},
 		ScrollFirstChar: []string{"^"},
 		ScrollEnd:       []string{"$"},
-		Wrap:        []string{"w"},
-		ToggleDiff:  []string{"t"},
+		Wrap:            []string{"w"},
+		ToggleDiff:      []string{"t"},
 
 		TreeMode:       []string{"f"},
 		CollapseAll:    []string{"z"},
@@ -105,21 +105,21 @@ func DefaultKeyMap() KeyMap {
 		FileComment:     []string{"C"},
 		Suggest:         []string{"s"},
 		Visual:          []string{"v"},
-		Reviewed:        []string{"r"},
+		Reviewed:        []string{"r", "space", " "},
 		Submit:          []string{"S"},
 		Pause:           []string{"P"},
 		ClearReview:     []string{"D"},
 		DismissArtifact: []string{"x"},
 		ToggleFocusMode: []string{"F"},
 
-		OpenInEditor: []string{"ctrl+g"},
+		OpenInEditor:     []string{"ctrl+g"},
 		BaseRef:          []string{"b"},
 		ArtifactVersions: []string{"B"},
 		CycleLayout:      []string{"T"},
-		Refresh:     []string{"R"},
-		Help:        []string{"?"},
-		Quit:        []string{"q"},
-		CommandMode: []string{":"},
+		Refresh:          []string{"R"},
+		Help:             []string{"?"},
+		Quit:             []string{"q"},
+		CommandMode:      []string{":"},
 
 		WizardAdvance: []string{"enter"},
 		WizardBack:    []string{"shift+tab", "backspace"},
@@ -262,7 +262,18 @@ func Label(bindings []string) string {
 		return ""
 	}
 	if len(bindings) == 1 {
-		return bindings[0]
+		return labelKey(bindings[0])
 	}
-	return bindings[0] + "/" + bindings[1]
+	return labelKey(bindings[0]) + "/" + labelKey(bindings[1])
+}
+
+func labelKey(binding string) string {
+	if isSpaceKey(binding) {
+		return "Space"
+	}
+	return binding
+}
+
+func isSpaceKey(key string) bool {
+	return key == "space" || key == " "
 }

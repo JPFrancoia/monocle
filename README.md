@@ -115,7 +115,7 @@ This means you can review the agent's *thinking* before it writes code — not j
 - **Configurable keybindings** — Override any navigation or action key via config
 - **Feedback queue** — Submit reviews while the agent is working; delivered when the agent next runs `/get-feedback`
 - **Connection indicator** — See at a glance whether your agent is connected, with manual socket override for troubleshooting
-- **Review tracking** — Mark files as reviewed with `r` (auto-advances to next), filter sidebar with `/`. When you submit feedback, monocle snapshots file state so it can automatically detect what changed on the next round — filter to unreviewed to see only what's new
+- **Review tracking** — Mark files as reviewed with `r` or with `Space` in the sidebar (auto-advances to next), filter sidebar with `/`. When you submit feedback, monocle snapshots file state so it can automatically detect what changed on the next round — filter to unreviewed to see only what's new
 - **Session persistence** — Reviews survive restarts via SQLite
 
 ## Agent Operations
@@ -161,7 +161,7 @@ Monocle exposes review operations via **MCP tools** (default for Claude Code) or
 | `v`                    | Visual select (multi-line comments)                       |
 | `x`                    | Toggle comment resolved (on a comment line)               |
 | `d`                    | Delete comment (on a comment line)                        |
-| `r`                    | Toggle file reviewed (auto-advances to next unreviewed)   |
+| `r` / `Space`          | Toggle file reviewed (`Space` in sidebar; auto-advances)  |
 | `/`                    | Cycle sidebar filter (all -> unreviewed -> reviewed)      |
 | `t`                    | Cycle diff style (unified/split/file) (any pane)          |
 | `T`                    | Cycle layout (auto/side-by-side/stacked)                  |

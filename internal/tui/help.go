@@ -120,7 +120,11 @@ func (m helpModel) View() string {
 		{"d", "Delete comment (on comment)"},
 	}
 	if m.reviewTracking {
-		reviewKeys = append(reviewKeys, struct{ key, desc string }{Label(km.Reviewed), "Toggle file reviewed"})
+		reviewedDesc := "Toggle file reviewed"
+		if Matches("space", km.Reviewed) || Matches(" ", km.Reviewed) {
+			reviewedDesc = "Toggle file reviewed (Space in sidebar)"
+		}
+		reviewKeys = append(reviewKeys, struct{ key, desc string }{Label(km.Reviewed), reviewedDesc})
 	}
 	reviewKeys = append(reviewKeys, []struct{ key, desc string }{
 		{Label(km.Submit) + " / :submit", "Submit review"},

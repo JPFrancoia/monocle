@@ -25,9 +25,9 @@ Each round builds on the last. Monocle remembers what the code looked like when 
 
 ## Reviewed state
 
-Every file in the sidebar has a reviewed state: either reviewed (green checkmark) or unreviewed (empty circle). You toggle this with `r`, and filter the sidebar with `/` to show only unreviewed or reviewed files.
+Every file in the sidebar has a reviewed state: either reviewed (green checkmark) or unreviewed (empty circle). You toggle this with `r` or with `Space` when the sidebar is focused, and filter the sidebar with `/` to show only unreviewed or reviewed files.
 
-When you press `r`, monocle records the file content you reviewed. If that file changes again, monocle automatically clears the reviewed mark so it shows up in the unreviewed filter again.
+When you press `r` or `Space` in the sidebar, monocle records the file content you reviewed. If that file changes again, monocle automatically clears the reviewed mark so it shows up in the unreviewed filter again.
 
 When you submit a review, monocle also captures a full snapshot for the round. That snapshot lets monocle compare the next set of agent changes against the state you submitted.
 
@@ -64,7 +64,7 @@ You can control which files are marked as reviewed when you submit a review with
 |-------|----------|
 | `"all"` (default) | All files are marked as reviewed. Assumes you've seen everything. |
 | `"commented"` | Only files you left comments on are marked as reviewed. |
-| `"manual"` | Only files you explicitly toggled with `r` are marked as reviewed. |
+| `"manual"` | Only files you explicitly toggled with `r` or `Space` in the sidebar are marked as reviewed. |
 
 ## Snapshot lifecycle
 
@@ -117,9 +117,9 @@ Files                 0 / 3
   ○ handlers.go      M
 ```
 
-You read each diff. `auth.go` looks good, so you press `r` to mark it
-reviewed. You notice a bug in `router.go` and leave a comment. You mark
-it reviewed too, so you can track that you've seen it:
+You read each diff. `auth.go` looks good, so you press `r` or `Space` in the
+sidebar, to mark it reviewed. You notice a bug in `router.go` and leave a
+comment. You mark it reviewed too, so you can track that you've seen it:
 
 ```
 Files                 2 / 3
