@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/josephschmitt/monocle/internal/types"
 )
@@ -153,6 +154,7 @@ func TestMouseClickFocusSidebar(t *testing.T) {
 	clickX := layout.sidebar.x + 2
 	clickY := layout.sidebar.y + 2
 	result, _ := app.Update(tea.MouseClickMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
+	result, _ = result.Update(tea.MouseReleaseMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
 	resultApp := result.(appModel)
 
 	if resultApp.focus != focusSidebar {
@@ -179,6 +181,7 @@ func TestMouseClickFocusDiff(t *testing.T) {
 	clickX := layout.diff.x + 5
 	clickY := layout.diff.y + 5
 	result, _ := app.Update(tea.MouseClickMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
+	result, _ = result.Update(tea.MouseReleaseMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
 	resultApp := result.(appModel)
 
 	if resultApp.focus != focusMain {
@@ -453,6 +456,16 @@ func TestMouseEnabledDefault(t *testing.T) {
 	}
 }
 
+func TestMouseUsesAllMotionMode(t *testing.T) {
+	m := NewApp(nil)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	app := updated.(appModel)
+
+	if app.View().MouseMode != tea.MouseModeAllMotion {
+		t.Fatalf("MouseMode = %v, want MouseModeAllMotion", app.View().MouseMode)
+	}
+}
+
 func TestMouseRightClickIgnored(t *testing.T) {
 	m := NewApp(nil)
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
@@ -468,22 +481,321 @@ func TestMouseRightClickIgnored(t *testing.T) {
 	}
 }
 
+func TestMouseSelectionExtractsRenderedText(t *testing.T) {
+	m := NewApp(nil)
+	m.mouseSelectionStarted = true
+	m.mouseSelectionDragging = true
+	m.mouseSelectionStartX = 1
+	m.mouseSelectionStartY = 0
+	m.mouseSelectionEndX = 3
+	m.mouseSelectionEndY = 1
+
+	got := m.selectedRenderedText("abcdef\nghijkl")
+	want := "bcdef\nghij"
+	if got != want {
+		t.Errorf("selected text = %q, want %q", got, want)
+	}
+}
+
+func TestMouseSelectionUsesFullFrameColumns(t *testing.T) {
+	m := NewApp(nil)
+	m.mouseSelectionStarted = true
+	m.mouseSelectionDragging = true
+	m.mouseSelectionStartX = 10
+	m.mouseSelectionStartY = 0
+	m.mouseSelectionEndX = 14
+	m.mouseSelectionEndY = 0
+
+	got := m.selectedRenderedText("sidebar---DIFF-CONTENT")
+	want := "DIFF-"
+	if got != want {
+		t.Errorf("selected text = %q, want %q", got, want)
+	}
+}
+
+func TestMouseSelectionCanCopyRenderedChrome(t *testing.T) {
+	m := NewApp(nil)
+	m.mouseSelectionStarted = true
+	m.mouseSelectionDragging = true
+	m.mouseSelectionStartX = 0
+	m.mouseSelectionStartY = 2
+	m.mouseSelectionEndX = 5
+	m.mouseSelectionEndY = 2
+
+	got := m.selectedRenderedText("title\ncontent\nstatus line")
+	want := "status"
+	if got != want {
+		t.Errorf("selected text = %q, want %q", got, want)
+	}
+}
+
+func TestMouseSelectionPreservesTrailingSpaces(t *testing.T) {
+	m := NewApp(nil)
+	m.mouseSelectionStarted = true
+	m.mouseSelectionDragging = true
+	m.mouseSelectionStartX = 1
+	m.mouseSelectionStartY = 0
+	m.mouseSelectionEndX = 2
+	m.mouseSelectionEndY = 0
+
+	got := m.selectedRenderedText("a  b")
+	want := "  "
+	if got != want {
+		t.Errorf("selected text = %q, want %q", got, want)
+	}
+}
+
+func TestMouseSelectionTextUsesCapturedFrame(t *testing.T) {
+	m := NewApp(nil)
+	m.mouseSelectionStarted = true
+	m.mouseSelectionDragging = true
+	m.mouseSelectionStartX = 1
+	m.mouseSelectionStartY = 0
+	m.mouseSelectionEndX = 3
+	m.mouseSelectionEndY = 0
+	m.mouseSelectionFrame = "abcdef"
+
+	got := m.mouseSelectionText()
+	want := "bcd"
+	if got != want {
+		t.Errorf("selection text = %q, want %q", got, want)
+	}
+}
+
+func TestMouseSelectionRenderHighlightsStyledText(t *testing.T) {
+	m := NewApp(nil)
+	m.mouseSelectionStarted = true
+	m.mouseSelectionDragging = true
+	m.mouseSelectionStartX = 0
+	m.mouseSelectionStartY = 0
+	m.mouseSelectionEndX = 1
+	m.mouseSelectionEndY = 0
+
+	selected := lipgloss.NewStyle().Reverse(true).Render("ab")
+	got := m.renderMouseSelection("\x1b[31mab\x1b[0mcd")
+	if !strings.Contains(got, selected) {
+		t.Fatalf("rendered selection %q does not contain highlighted plain segment %q", got, selected)
+	}
+}
+
+func TestMouseSelectionEscClearsSelection(t *testing.T) {
+	m := NewApp(nil)
+	m.mouseSelectionStarted = true
+	m.mouseSelectionDragging = true
+	m.mouseSelectionStartX = 0
+	m.mouseSelectionStartY = 0
+	m.mouseSelectionEndX = 1
+	m.mouseSelectionEndY = 0
+
+	model, cmd := m.handleKey(tea.KeyPressMsg{Code: tea.KeyEsc})
+	app := model.(appModel)
+	if cmd != nil {
+		t.Fatal("Esc clear should not return a command")
+	}
+	if app.mousePendingClick || app.mouseSelectionStarted || app.mouseSelectionDragging {
+		t.Fatal("selection state should clear on Esc")
+	}
+}
+
+func TestMouseSelectionCtrlCCopiesSelection(t *testing.T) {
+	m := NewApp(nil)
+	m.mouseSelectionStarted = true
+	m.mouseSelectionDragging = true
+	m.mouseSelectionStartX = 0
+	m.mouseSelectionStartY = 0
+	m.mouseSelectionEndX = 1
+	m.mouseSelectionEndY = 0
+
+	model, cmd := m.handleKey(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	app := model.(appModel)
+	if cmd == nil {
+		t.Fatal("Ctrl+C should return a copy command for active selection")
+	}
+	if app.mousePendingClick || app.mouseSelectionStarted || app.mouseSelectionDragging {
+		t.Fatal("selection state should clear after Ctrl+C")
+	}
+}
+
+func TestMouseClickWaitsForRelease(t *testing.T) {
+	m := NewApp(nil)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	app := updated.(appModel)
+	layout := computePaneLayout(&app)
+	clickX := layout.diff.x + 5
+	clickY := layout.diff.y + 5
+
+	result, _ := app.Update(tea.MouseClickMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
+	pressed := result.(appModel)
+	if pressed.focus != focusSidebar {
+		t.Fatalf("focus after mouse down = %d, want focusSidebar", pressed.focus)
+	}
+	if !pressed.mousePendingClick {
+		t.Fatal("expected pending click after mouse down")
+	}
+
+	result, _ = result.Update(tea.MouseReleaseMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
+	released := result.(appModel)
+	if released.focus != focusMain {
+		t.Fatalf("focus after release = %d, want focusMain", released.focus)
+	}
+	if released.mousePendingClick {
+		t.Fatal("pending click should clear after release")
+	}
+}
+
+func TestMouseDragDoesNotDispatchClick(t *testing.T) {
+	m := NewApp(nil)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	app := updated.(appModel)
+	layout := computePaneLayout(&app)
+	startX := layout.diff.x + 5
+	startY := layout.diff.y + 5
+	endY := startY + 1
+
+	result, _ := app.Update(tea.MouseClickMsg{X: startX, Y: startY, Button: tea.MouseLeft})
+	result, _ = result.Update(tea.MouseMotionMsg{X: startX, Y: endY, Button: tea.MouseLeft})
+	dragging := result.(appModel)
+	if !dragging.mouseSelectionDragging {
+		t.Fatal("expected drag selection after mouse motion")
+	}
+
+	var cmd tea.Cmd
+	result, cmd = result.Update(tea.MouseReleaseMsg{X: startX, Y: endY, Button: tea.MouseLeft})
+	released := result.(appModel)
+	if cmd == nil {
+		t.Fatal("drag release should return a copy command")
+	}
+	if released.focus != focusSidebar {
+		t.Fatalf("drag should not dispatch a diff click; focus = %d, want focusSidebar", released.focus)
+	}
+	if released.mousePendingClick || released.mouseSelectionDragging || released.mouseSelectionStarted {
+		t.Fatal("mouse selection state should clear after drag release")
+	}
+}
+
+func TestMouseDragAcceptsMouseNoneAfterLeftPress(t *testing.T) {
+	m := NewApp(nil)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	app := updated.(appModel)
+	layout := computePaneLayout(&app)
+	startX := layout.diff.x + 5
+	startY := layout.diff.y + 5
+	endY := startY + 1
+
+	result, _ := app.Update(tea.MouseClickMsg{X: startX, Y: startY, Button: tea.MouseLeft})
+	result, _ = result.Update(tea.MouseMotionMsg{X: startX, Y: endY, Button: tea.MouseNone})
+	dragging := result.(appModel)
+	if !dragging.mouseSelectionDragging {
+		t.Fatal("expected MouseNone motion to continue drag selection after left press")
+	}
+
+	var cmd tea.Cmd
+	result, cmd = result.Update(tea.MouseReleaseMsg{X: startX, Y: endY, Button: tea.MouseNone})
+	released := result.(appModel)
+	if cmd == nil {
+		t.Fatal("MouseNone release should return a copy command for active drag")
+	}
+	if released.mousePendingClick || released.mouseSelectionDragging || released.mouseSelectionStarted {
+		t.Fatal("mouse selection state should clear after MouseNone drag release")
+	}
+}
+
+func TestMouseReleaseWithoutMotionStaysClick(t *testing.T) {
+	m := NewApp(nil)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	app := updated.(appModel)
+	layout := computePaneLayout(&app)
+	startX := layout.diff.x + 5
+	startY := layout.diff.y + 5
+
+	result, _ := app.Update(tea.MouseClickMsg{X: startX, Y: startY, Button: tea.MouseLeft})
+	result, _ = result.Update(tea.MouseReleaseMsg{X: startX + 3, Y: startY + 1, Button: tea.MouseLeft})
+	released := result.(appModel)
+
+	if released.focus != focusMain {
+		t.Fatalf("release without motion should dispatch click; focus = %d, want focusMain", released.focus)
+	}
+	if released.statusBar.feedbackStatus == "copied" {
+		t.Fatal("release without motion should not copy text")
+	}
+}
+
+func TestMouseGestureCancelsWhenOverlayChanges(t *testing.T) {
+	m := NewApp(nil)
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	app := updated.(appModel)
+	layout := computePaneLayout(&app)
+	startX := layout.diff.x + 5
+	startY := layout.diff.y + 5
+
+	result, _ := app.Update(tea.MouseClickMsg{X: startX, Y: startY, Button: tea.MouseLeft})
+	pressed := result.(appModel)
+	pressed.overlay = overlayHelp
+	result, _ = pressed.Update(tea.MouseReleaseMsg{X: startX, Y: startY, Button: tea.MouseLeft})
+	released := result.(appModel)
+
+	if released.focus != focusSidebar {
+		t.Fatalf("overlay change should cancel click dispatch; focus = %d, want focusSidebar", released.focus)
+	}
+	if released.mousePendingClick || released.mouseSelectionStarted || released.mouseSelectionDragging {
+		t.Fatal("mouse gesture state should clear after overlay change")
+	}
+}
+
+func TestMouseCopyResultStatus(t *testing.T) {
+	m := NewApp(nil)
+
+	result, _ := m.Update(mouseCopyResultMsg{})
+	app := result.(appModel)
+	if app.statusBar.feedbackStatus != "copied" {
+		t.Fatalf("feedbackStatus = %q, want copied", app.statusBar.feedbackStatus)
+	}
+
+	result, _ = app.Update(mouseCopyResultMsg{err: "copy failed"})
+	app = result.(appModel)
+	if app.statusBar.feedbackStatus != "copy_failed" {
+		t.Fatalf("feedbackStatus = %q, want copy_failed", app.statusBar.feedbackStatus)
+	}
+}
+
+func TestBuildThreadMarkersOpenAndResolved(t *testing.T) {
+	session := &types.ReviewSession{Comments: []types.ReviewComment{
+		{ID: "c1", TargetType: types.TargetFile, TargetRef: "open.go", Type: types.CommentIssue},
+		{ID: "c2", TargetType: types.TargetFile, TargetRef: "done.go", Type: types.CommentNote, Resolved: true},
+	}}
+	markers := buildThreadMarkers(session)
+	if markers[threadMarkerKey(types.TargetFile, "open.go")] != threadMarkerOpen {
+		t.Fatalf("open marker not set")
+	}
+	if markers[threadMarkerKey(types.TargetFile, "done.go")] != threadMarkerResolved {
+		t.Fatalf("resolved marker not set")
+	}
+}
+
 func TestCommentEditorClickTypeLabel(t *testing.T) {
 	m := &commentEditorModel{
 		active:      true,
 		commentType: types.CommentIssue,
 	}
 
-	// Click on SUGGESTION label (starts at x=8: ISSUE(7) + separator(1))
+	// Click on QUESTION label (starts at x=8: ISSUE(7) + separator(1))
 	if !m.handleClick(8, 4) {
+		t.Error("click on QUESTION label should return true")
+	}
+	if m.commentType != types.CommentQuestion {
+		t.Errorf("commentType = %v, want CommentQuestion", m.commentType)
+	}
+
+	// Click on SUGGESTION label (starts at x=19: ISSUE(7) + sep + QUESTION(10) + sep)
+	if !m.handleClick(19, 4) {
 		t.Error("click on SUGGESTION label should return true")
 	}
 	if m.commentType != types.CommentSuggestion {
 		t.Errorf("commentType = %v, want CommentSuggestion", m.commentType)
 	}
 
-	// Click on NOTE label (starts at x=21: ISSUE(7) + sep(1) + SUGGESTION(12) + sep(1))
-	if !m.handleClick(21, 4) {
+	// Click on NOTE label (starts at x=32 after SUGGESTION)
+	if !m.handleClick(32, 4) {
 		t.Error("click on NOTE label should return true")
 	}
 	if m.commentType != types.CommentNote {

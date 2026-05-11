@@ -44,6 +44,7 @@ type ReviewCmd struct {
 	GetFeedback  ReviewGetFeedbackCmd  `cmd:"get-feedback" help:"Retrieve review feedback"`
 	SendArtifact ReviewSendArtifactCmd `cmd:"send-artifact" help:"Send content to the reviewer"`
 	AddFiles     ReviewAddFilesCmd     `cmd:"add-files" help:"Add files to the review session"`
+	Reply        ReviewReplyCmd        `cmd:"reply" help:"Reply to a review comment thread"`
 }
 
 // WorkDirFlag is embedded by commands that support --workdir.
@@ -80,6 +81,14 @@ type ReviewAddFilesCmd struct {
 	Socket string   `help:"Override socket path" env:"MONOCLE_SOCKET" default:""`
 	Paths  []string `arg:"" required:"" help:"File or directory paths to add for review"`
 	JSON   bool     `help:"Output as JSON" default:"false"`
+}
+
+type ReviewReplyCmd struct {
+	WorkDirFlag
+	Socket    string `help:"Override socket path" env:"MONOCLE_SOCKET" default:""`
+	CommentID string `help:"Thread/comment ID to reply to" name:"comment-id" required:""`
+	Body      string `help:"Reply body; reads stdin when empty" default:""`
+	JSON      bool   `help:"Output as JSON" default:"false"`
 }
 
 type RunCmd struct {
@@ -608,6 +617,56 @@ func (cmd *ReviewAddFilesCmd) Run() error {
 		return printJSON(add)
 	}
 	fmt.Println(add.Message)
+	return nil
+}
+
+func (cmd *ReviewReplyCmd) Run() error {
+	body := cmd.Body
+	if body == "" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("read stdin: %w", err)
+		}
+		body = string(data)
+	}
+	if body == "" {
+		return fmt.Errorf("no reply body: pass --body or pipe content to stdin")
+	}
+
+	socketPath, err := resolveSocketForWorkDir(cmd.Socket, cmd.WorkDir)
+	if err != nil {
+		return err
+	}
+	c, err := client.Connect(socketPath)
+	if err != nil {
+		if errors.Is(err, client.ErrNotRunning) {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return err
+	}
+	defer c.Close()
+
+	resp, err := c.Request(
+		&protocol.ReplyToThreadMsg{
+			Type:      protocol.TypeReplyToThread,
+			CommentID: cmd.CommentID,
+			Body:      body,
+		},
+		client.DefaultTimeout,
+	)
+	if err != nil {
+		return fmt.Errorf("reply to thread: %w", err)
+	}
+
+	reply := resp.(*protocol.ReplyToThreadResponse)
+	if cmd.JSON {
+		return printJSON(reply)
+	}
+	if !reply.Success {
+		return fmt.Errorf("reply to thread: %s", reply.Message)
+	}
+	fmt.Println(reply.Message)
 	return nil
 }
 

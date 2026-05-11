@@ -40,7 +40,7 @@ See the [CLI reference](/reference/cli#monocle-register) for a full list of flag
     monocle register claude
     ```
 
-    By default, this configures an MCP server in `.mcp.json` that exposes monocle's review tools directly, and installs slash commands in `.claude/commands/`. Claude Code calls the MCP tools (`review_status`, `get_feedback`, `send_artifact`, `add_files`) instead of running CLI commands.
+    By default, this configures an MCP server in `.mcp.json` that exposes monocle's review tools directly, and installs slash commands in `.claude/commands/`. Claude Code calls the MCP tools (`review_status`, `get_feedback`, `send_artifact`, `add_files`, `reply_to_thread`) instead of running CLI commands.
 
     To use skills mode instead (the previous default), pass `--integration-mode skills`:
 

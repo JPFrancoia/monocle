@@ -5,12 +5,13 @@ import (
 	"fmt"
 )
 
-const schemaVersion = 9
+const schemaVersion = 10
 
 const dropSQL = `
 DROP TABLE IF EXISTS review_snapshot_files;
 DROP TABLE IF EXISTS review_snapshots;
 DROP TABLE IF EXISTS review_submissions;
+DROP TABLE IF EXISTS comment_replies;
 DROP TABLE IF EXISTS comments;
 DROP TABLE IF EXISTS content_versions;
 DROP TABLE IF EXISTS content_items;
@@ -87,6 +88,16 @@ CREATE TABLE IF NOT EXISTS comments (
 	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS comment_replies (
+	id TEXT PRIMARY KEY,
+	session_id TEXT NOT NULL REFERENCES sessions(id),
+	comment_id TEXT NOT NULL REFERENCES comments(id),
+	author TEXT NOT NULL,
+	body TEXT NOT NULL,
+	created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+	updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS review_submissions (
 	id TEXT PRIMARY KEY,
 	session_id TEXT NOT NULL REFERENCES sessions(id),
@@ -132,6 +143,8 @@ CREATE INDEX IF NOT EXISTS idx_changed_files_session ON changed_files(session_id
 CREATE INDEX IF NOT EXISTS idx_content_items_session ON content_items(session_id);
 CREATE INDEX IF NOT EXISTS idx_comments_session ON comments(session_id);
 CREATE INDEX IF NOT EXISTS idx_comments_target ON comments(target_type, target_ref);
+CREATE INDEX IF NOT EXISTS idx_comment_replies_session ON comment_replies(session_id);
+CREATE INDEX IF NOT EXISTS idx_comment_replies_comment ON comment_replies(comment_id);
 CREATE INDEX IF NOT EXISTS idx_review_submissions_session ON review_submissions(session_id);
 CREATE INDEX IF NOT EXISTS idx_additional_files_session ON additional_files(session_id);
 CREATE INDEX IF NOT EXISTS idx_review_snapshots_session ON review_snapshots(session_id);

@@ -14,10 +14,10 @@ The `/review-plan-wait` skill submits a plan to your TUI and blocks the agent un
     Your agent runs `/review-plan-wait`, which calls `monocle review send-artifact --wait` under the hood. The plan appears in the monocle sidebar.
   </Step>
   <Step title="You review and respond">
-    Read the plan, leave any line-level comments (issues, suggestions, notes), and press `S` to submit your review. An empty review with no comments counts as an approval.
+    Read the plan, leave any line-level comments (issues, questions, suggestions, notes), and press `S` to submit your review. An empty review with no comments counts as an approval.
   </Step>
   <Step title="Agent receives your feedback">
-    If you approve, the agent unblocks and continues. If you request changes, the agent updates the plan and resubmits — the loop repeats until you're satisfied.
+    If you approve, the agent unblocks and continues. If you request changes or ask questions, the agent replies in the affected threads, updates the plan if needed, and resubmits — the loop repeats until you're satisfied.
   </Step>
 </Steps>
 

@@ -24,7 +24,10 @@ Submits a plan file to Monocle and blocks until the reviewer responds with feedb
 
 4. **Handle the response:**
    - If the reviewer approved with no comments, inform the user and continue
-   - If the reviewer provided feedback requesting changes, share the feedback with the user and act on it — update the plan, then run `monocle review send-artifact --wait` again
+   - If the reviewer provided feedback requesting changes or asked questions, share the feedback with the user and act on it — update the plan, reply to each relevant thread, then run `monocle review send-artifact --wait` again
+   - Feedback comments include a `Thread ID`; reply with `monocle review reply --comment-id <thread-id> --body "..."`
+   - For longer replies, pipe the body on stdin, for example `printf '%s\n' "Updated the plan because ..." | monocle review reply --comment-id <thread-id>`
+   - Answer questions in the thread, explain what changed for issues/suggestions, and do not try to resolve threads; only the reviewer can resolve them
    - Keep iterating until the reviewer approves
 
 If Monocle reports multiple running sessions, ask the user which listed repo to use. After they choose, rerun the command with `-C <chosen repo>`.

@@ -28,7 +28,7 @@ For all other agents, the connection goes directly over the socket, and feedback
     Press `c` on a diff line to add a line-level comment. Press `C` to add a file-level comment. Use `v` to enter visual mode and select a range of lines before commenting. Press `Tab` in the comment editor to cycle through comment types.
   </Step>
   <Step title="Submit your review">
-    Press `S` to open the submit modal. Your review is formatted and queued for delivery. The agent picks it up and starts addressing each comment.
+    Press `S` to open the submit modal. Your review is formatted and queued for delivery. The agent picks it up, addresses each comment, and can reply in the original thread.
   </Step>
   <Step title="Iterate">
     After the agent makes changes, the diffs update in your TUI. Review again, leave new comments if needed, and submit. Repeat until you're satisfied.
@@ -56,9 +56,9 @@ When you add a comment, press `Tab` in the comment editor to cycle through these
 | Type | Use for |
 |------|---------|
 | **Issue** | Problems that need to be fixed before you approve |
+| **Question** | Things you need the agent to answer before you decide |
 | **Suggestion** | Improvements that would be nice but aren't blockers |
-| **Note** | Observations, context, or questions |
-| **Praise** | Things the agent did well |
+| **Note** | Observations or context that should stay with the review |
 
 ### Line-level vs file-level comments
 
@@ -66,13 +66,15 @@ When you add a comment, press `Tab` in the comment editor to cycle through these
 - **Visual selection** (`v`): Enter visual mode to select a range of lines, then press `c` to attach a comment spanning the entire selection.
 - **File-level** (`C`): Attached to the file as a whole, not a specific line. Use for high-level feedback about a file's structure or approach.
 
+Mouse drag selects rendered terminal text and copies it on release. Use keyboard visual selection when you want to attach a multi-line comment.
+
 <Note>
-  You can mark a comment as resolved with `x`. Resolved comments are excluded from submitted reviews. To delete a comment entirely, press `d` while on a comment line.
+  You can mark a comment as resolved with `x`. Resolved threads stay visible for context, but they are excluded from submitted reviews. Agents can reply to open threads, but only you can resolve them. To delete a comment entirely, press `d` while on a comment line.
 </Note>
 
 ### Comment expansion
 
-Comments expand automatically when you hover over them, showing the full comment text with syntax highlighting. Press `Space` on a comment line to manually toggle it expanded or collapsed. You can disable auto-expansion or adjust the delay in your [config file](/configuration/config-file) with the `comment_expand` and `comment_expand_delay` settings.
+Comments expand automatically when you hover over them, showing the full comment text with syntax highlighting. Agent replies appear inside the expanded thread block. Press `Space` on a comment line to manually toggle it expanded or collapsed. You can disable auto-expansion or adjust the delay in your [config file](/configuration/config-file) with the `comment_expand` and `comment_expand_delay` settings.
 
 ## The feedback queue
 
@@ -80,6 +82,7 @@ When you submit a review, monocle doesn't send it directly — it queues it for 
 
 - You can submit a review even if your agent is busy working on something else.
 - Multiple reviews can accumulate in the queue. When the agent next retrieves feedback, it receives all queued reviews combined.
+- Each comment includes a thread ID. Agents use that ID to answer questions or explain changes in the same thread.
 - If the agent disconnects and reconnects, queued reviews are still waiting.
 
 How the agent learns about queued feedback depends on your setup. See [Push Notifications](/concepts/push-notifications) for details.
@@ -91,6 +94,7 @@ Press `S` to open the submit modal. From here:
 - **Submit**: Formats your comments into a structured review and queues it for delivery. When you submit with **Request Changes**, monocle creates a snapshot so it can track what changed on the next round. See [Review State](/concepts/review-state) for details.
 - **Copy to clipboard**: Toggle the checkbox with `Shift+Tab` to also copy the formatted review to your clipboard when submitting.
 - **Yank without submitting**: Press `Ctrl+y` in the submit modal to copy the formatted review to your clipboard and close the modal without queuing it.
+- **Paste**: Terminal paste inserts text into the submit modal. Paste also works in the comment editor and command mode.
 - **External editor**: Press `Ctrl+g` in the submit modal (or any comment modal) to open the current text in your `$VISUAL` or `$EDITOR`. Edit, save, and quit — the text comes back into monocle.
 
 ### Approval

@@ -295,12 +295,25 @@ func (d *DB) UpdateComment(c *types.ReviewComment) error {
 
 // DeleteComment removes a comment by ID.
 func (d *DB) DeleteComment(id string) error {
+	if _, err := d.Exec(`DELETE FROM comment_replies WHERE comment_id = ?`, id); err != nil {
+		return err
+	}
 	_, err := d.Exec(`DELETE FROM comments WHERE id = ?`, id)
 	return err
 }
 
 // DeleteCommentsByTarget removes all comments attached to the given target in a session.
 func (d *DB) DeleteCommentsByTarget(sessionID string, targetType types.TargetType, targetRef string) error {
+	if _, err := d.Exec(
+		`DELETE FROM comment_replies
+		 WHERE session_id = ?
+		   AND comment_id IN (
+		     SELECT id FROM comments WHERE session_id = ? AND target_type = ? AND target_ref = ?
+		   )`,
+		sessionID, sessionID, string(targetType), targetRef,
+	); err != nil {
+		return err
+	}
 	_, err := d.Exec(
 		`DELETE FROM comments WHERE session_id = ? AND target_type = ? AND target_ref = ?`,
 		sessionID, string(targetType), targetRef,
@@ -333,7 +346,54 @@ func (d *DB) GetComments(sessionID string) ([]types.ReviewComment, error) {
 		c.Resolved = resolved != 0
 		comments = append(comments, c)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return d.attachCommentReplies(sessionID, comments)
+}
+
+func (d *DB) attachCommentReplies(sessionID string, comments []types.ReviewComment) ([]types.ReviewComment, error) {
+	if len(comments) == 0 {
+		return comments, nil
+	}
+
+	commentIndex := make(map[string]int, len(comments))
+	for i := range comments {
+		commentIndex[comments[i].ID] = i
+	}
+
+	rows, err := d.Query(
+		`SELECT id, comment_id, author, body, created_at, updated_at
+		 FROM comment_replies WHERE session_id = ? ORDER BY created_at`, sessionID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var r types.CommentReply
+		if err := rows.Scan(&r.ID, &r.CommentID, &r.Author, &r.Body, &r.CreatedAt, &r.UpdatedAt); err != nil {
+			return nil, err
+		}
+		idx, ok := commentIndex[r.CommentID]
+		if !ok {
+			continue
+		}
+		comments[idx].Replies = append(comments[idx].Replies, r)
+	}
 	return comments, rows.Err()
+}
+
+// CreateCommentReply inserts an agent or reviewer reply into an existing comment thread.
+func (d *DB) CreateCommentReply(sessionID string, r *types.CommentReply) error {
+	_, err := d.Exec(
+		`INSERT INTO comment_replies (id, session_id, comment_id, author, body, created_at, updated_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+		r.ID, sessionID, r.CommentID, r.Author, r.Body, r.CreatedAt, r.UpdatedAt,
+	)
+	return err
 }
 
 // ResolveComment sets the resolved flag for a comment.
@@ -347,6 +407,9 @@ func (d *DB) ResolveComment(id string, resolved bool) error {
 
 // ClearComments deletes all comments in the session.
 func (d *DB) ClearComments(sessionID string) error {
+	if _, err := d.Exec(`DELETE FROM comment_replies WHERE session_id = ?`, sessionID); err != nil {
+		return err
+	}
 	_, err := d.Exec(`DELETE FROM comments WHERE session_id = ?`, sessionID)
 	return err
 }

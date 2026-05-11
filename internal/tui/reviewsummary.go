@@ -50,8 +50,8 @@ func (m *reviewSummaryModel) open(summary *types.ReviewSummary, agentConnected b
 	m.body = ""
 	m.copyToClipboard = false
 
-	// Default action: request_changes if issues or suggestions, approve otherwise
-	hasActionable := summary != nil && (summary.IssueCt+summary.SuggestionCt > 0)
+	// Default action: request_changes if issues, questions, or suggestions exist.
+	hasActionable := summary != nil && (summary.IssueCt+summary.QuestionCt+summary.SuggestionCt > 0)
 	if hasActionable {
 		m.action = types.ActionRequestChanges
 	} else {
@@ -72,7 +72,7 @@ func (m reviewSummaryModel) canSubmit() bool {
 	if strings.TrimSpace(m.body) != "" {
 		return true
 	}
-	if m.summary != nil && (m.summary.IssueCt+m.summary.SuggestionCt+m.summary.NoteCt+m.summary.PraiseCt > 0) {
+	if m.summary != nil && (m.summary.IssueCt+m.summary.QuestionCt+m.summary.SuggestionCt+m.summary.NoteCt > 0) {
 		return true
 	}
 	return false
@@ -84,6 +84,10 @@ func (m reviewSummaryModel) Update(msg tea.Msg) (reviewSummaryModel, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		if msg.Content != "" {
+			m.body += msg.Content
+		}
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "enter":
@@ -206,18 +210,18 @@ func (m reviewSummaryModel) checkboxLine() int {
 	line := 4
 
 	// Variable-height comment summary section
-	hasComments := m.summary != nil && (m.summary.IssueCt+m.summary.SuggestionCt+m.summary.NoteCt+m.summary.PraiseCt > 0)
+	hasComments := m.summary != nil && (m.summary.IssueCt+m.summary.QuestionCt+m.summary.SuggestionCt+m.summary.NoteCt > 0)
 	if hasComments {
 		if m.summary.IssueCt > 0 {
+			line++
+		}
+		if m.summary.QuestionCt > 0 {
 			line++
 		}
 		if m.summary.SuggestionCt > 0 {
 			line++
 		}
 		if m.summary.NoteCt > 0 {
-			line++
-		}
-		if m.summary.PraiseCt > 0 {
 			line++
 		}
 		line++ // blank after counts
@@ -288,19 +292,19 @@ func (m reviewSummaryModel) View() string {
 	b.WriteString("\n\n")
 
 	// Comment counts (if any inline comments)
-	hasComments := m.summary != nil && (m.summary.IssueCt+m.summary.SuggestionCt+m.summary.NoteCt+m.summary.PraiseCt > 0)
+	hasComments := m.summary != nil && (m.summary.IssueCt+m.summary.QuestionCt+m.summary.SuggestionCt+m.summary.NoteCt > 0)
 	if hasComments {
 		if m.summary.IssueCt > 0 {
 			b.WriteString(fmt.Sprintf("  Issues:      %d\n", m.summary.IssueCt))
+		}
+		if m.summary.QuestionCt > 0 {
+			b.WriteString(fmt.Sprintf("  Questions:   %d\n", m.summary.QuestionCt))
 		}
 		if m.summary.SuggestionCt > 0 {
 			b.WriteString(fmt.Sprintf("  Suggestions: %d\n", m.summary.SuggestionCt))
 		}
 		if m.summary.NoteCt > 0 {
 			b.WriteString(fmt.Sprintf("  Notes:       %d\n", m.summary.NoteCt))
-		}
-		if m.summary.PraiseCt > 0 {
-			b.WriteString(fmt.Sprintf("  Praise:      %d\n", m.summary.PraiseCt))
 		}
 		b.WriteString("\n")
 

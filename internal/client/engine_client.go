@@ -585,6 +585,21 @@ func (c *EngineClient) EditComment(commentID string, commentType types.CommentTy
 	return r.Comment, nil
 }
 
+func (c *EngineClient) AddCommentReply(commentID, author, body string) (*types.CommentReply, error) {
+	resp, err := c.request(&protocol.ReplyToThreadMsg{Type: protocol.TypeReplyToThread, CommentID: commentID, Author: author, Body: body})
+	if err != nil {
+		return nil, err
+	}
+	r := resp.(*protocol.ReplyToThreadResponse)
+	if !r.Success {
+		if r.Message != "" {
+			return nil, errors.New(r.Message)
+		}
+		return nil, errors.New("reply to thread failed")
+	}
+	return r.Reply, nil
+}
+
 func (c *EngineClient) DeleteComment(commentID string) error {
 	resp, err := c.request(&protocol.DeleteCommentMsg{Type: protocol.TypeDeleteComment, CommentID: commentID})
 	if err != nil {

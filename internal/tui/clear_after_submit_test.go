@@ -143,7 +143,7 @@ func TestLoadInitialItemsFallsBackToCachedFilesOnRefreshError(t *testing.T) {
 	}
 }
 
-func TestSubmitSuccess_AlwaysClearsComments(t *testing.T) {
+func TestSubmitSuccess_PreservesThreads(t *testing.T) {
 	engine := &stubEngine{
 		cfg:     &types.Config{},
 		session: newTestSession(true),
@@ -154,10 +154,13 @@ func TestSubmitSuccess_AlwaysClearsComments(t *testing.T) {
 	app := result.(appModel)
 
 	if app.overlay == overlayConfirm {
-		t.Error("expected no confirm modal — comments should always auto-clear")
+		t.Error("expected no confirm modal")
 	}
-	if !engine.cleared {
-		t.Error("expected ClearComments to be called")
+	if engine.cleared {
+		t.Error("expected ClearComments NOT to be called; threads stay visible until resolved or deleted")
+	}
+	if app.statusBar.commentCount != 1 {
+		t.Errorf("commentCount = %d, want 1", app.statusBar.commentCount)
 	}
 }
 
@@ -179,7 +182,7 @@ func TestSubmitSuccess_NoComments_SkipsClear(t *testing.T) {
 	}
 }
 
-func TestSubmitSuccess_AgentDisconnected_ClearsComments(t *testing.T) {
+func TestSubmitSuccess_AgentDisconnected_PreservesThreads(t *testing.T) {
 	engine := &stubEngine{
 		cfg:     &types.Config{},
 		session: newTestSession(true),
@@ -191,10 +194,8 @@ func TestSubmitSuccess_AgentDisconnected_ClearsComments(t *testing.T) {
 	if cmd != nil {
 		t.Error("expected no command when agent disconnected")
 	}
-	// Comments are cleared even without agent — they're frozen in the
-	// queued submission record and should not remain in the UI.
-	if !engine.cleared {
-		t.Error("expected ClearComments to be called for queued submission")
+	if engine.cleared {
+		t.Error("expected ClearComments NOT to be called for queued submission")
 	}
 }
 
@@ -220,10 +221,9 @@ func TestSubmitSuccess_PreservesContentView(t *testing.T) {
 	if app.diffView.contentID != "plan-1" {
 		t.Errorf("expected contentID preserved, got %q", app.diffView.contentID)
 	}
-	// Inline comment annotations should be cleared — comments are frozen
-	// in the submission record.
-	if len(app.diffView.comments) != 0 {
-		t.Errorf("expected inline comments cleared, got %d", len(app.diffView.comments))
+	// Inline comment annotations persist so replies and resolution state can stay visible.
+	if len(app.diffView.comments) != 1 {
+		t.Errorf("expected inline comments preserved, got %d", len(app.diffView.comments))
 	}
 }
 

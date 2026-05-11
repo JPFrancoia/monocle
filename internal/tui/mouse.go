@@ -1,8 +1,13 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
+
+	"github.com/josephschmitt/monocle/internal/clipboard"
 )
 
 // paneRegion describes a rectangular area in terminal coordinates.
@@ -27,9 +32,10 @@ type paneLayout struct {
 }
 
 const (
-	borderW     = 2 // left + right border
-	borderH     = 2 // top + bottom border
-	titleHeight = 1
+	borderW      = 2 // left + right border
+	borderH      = 2 // top + bottom border
+	titleHeight  = 1
+	mouseOriginY = 1 // empirical offset for Bubble Tea v2 alt-screen rendering
 )
 
 // computePaneLayout calculates pane content regions from the app's layout state.
@@ -39,15 +45,13 @@ const (
 // between the View string content and the terminal mouse coordinates. The
 // mouseOriginY constant accounts for this.
 func computePaneLayout(m *appModel) paneLayout {
-	const mouseOriginY = 1 // empirical offset for Bubble Tea v2 alt-screen rendering
-
 	// Title bar occupies 1 row. Border top occupies 1 row.
 	// Content starts after: mouseOriginY + titleHeight + borderTop(1).
 	bodyY := mouseOriginY + titleHeight
 
 	if m.layout == layoutStacked {
 		// Sidebar: full width, above diff
-		sidebarContentX := 1 // 1 char border left
+		sidebarContentX := 1         // 1 char border left
 		sidebarContentY := bodyY + 1 // 1 char border top
 		sidebarContentW := m.sidebar.width
 		sidebarContentH := m.sidebar.height
@@ -233,23 +237,206 @@ func (m appModel) handleMouseWheel(msg tea.MouseWheelMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handleMouseMotion processes drag events for visual selection in the diff view.
+// handleMouseMotion promotes a pending click to rendered-text selection once
+// the pointer moves to another terminal cell.
 func (m appModel) handleMouseMotion(msg tea.MouseMotionMsg) (tea.Model, tea.Cmd) {
-	if !m.diffView.mouseDragActive {
+	if !m.mousePendingClick && !m.mouseSelectionStarted {
 		return m, nil
 	}
-
-	layout := computePaneLayout(&m)
-	_, relY := layout.diff.translate(msg.X, msg.Y)
-	m.diffView.handleMouseMotion(relY)
-	return m, m.diffView.cursorMoved()
+	if !m.mouseButtonMatchesLeft(msg.Button) || m.overlay != m.mousePendingOverlay {
+		m.cancelMouseGesture()
+		return m, nil
+	}
+	m.mouseSelectionEndX = msg.X
+	m.mouseSelectionEndY = msg.Y
+	if msg.X != m.mouseSelectionStartX || msg.Y != m.mouseSelectionStartY {
+		m.mouseSelectionStarted = true
+		m.mouseSelectionDragging = true
+		m.captureMouseSelectionFrame()
+	}
+	return m, nil
 }
 
-// handleMouseRelease ends drag tracking and finalizes visual selection.
+// handleMouseRelease commits either a normal click or a rendered-text copy.
 func (m appModel) handleMouseRelease(msg tea.MouseReleaseMsg) (tea.Model, tea.Cmd) {
-	_ = msg
-	m.diffView.handleMouseRelease()
-	return m, nil
+	if !m.mousePendingClick && !m.mouseSelectionStarted {
+		return m, nil
+	}
+	if !m.mouseButtonMatchesLeft(msg.Button) || m.overlay != m.mousePendingOverlay {
+		m.cancelMouseGesture()
+		return m, nil
+	}
+	clickX := m.mouseSelectionStartX
+	clickY := m.mouseSelectionStartY
+	m.mouseSelectionEndX = msg.X
+	m.mouseSelectionEndY = msg.Y
+	isDrag := m.mouseSelectionDragging
+	m.mousePendingClick = false
+	m.mousePendingOverlay = overlayNone
+
+	if !isDrag {
+		m.mouseSelectionStarted = false
+		m.mouseSelectionDragging = false
+		return m.handleMouseClick(tea.MouseClickMsg{X: clickX, Y: clickY, Button: tea.MouseLeft})
+	}
+
+	m.mouseSelectionStarted = true
+	return m.copyMouseSelection()
+}
+
+func (m appModel) hasMouseSelection() bool {
+	return m.mouseSelectionStarted || m.mouseSelectionDragging
+}
+
+func (m appModel) copyMouseSelection() (tea.Model, tea.Cmd) {
+	copyText := m.mouseSelectionText()
+	m.cancelMouseGesture()
+	if copyText == "" {
+		return m, nil
+	}
+	return m, func() tea.Msg {
+		if err := clipboard.Copy(copyText); err != nil {
+			return mouseCopyResultMsg{err: err.Error()}
+		}
+		return mouseCopyResultMsg{}
+	}
+}
+
+func (m appModel) mouseSelectionText() string {
+	frame := m.mouseSelectionFrame
+	if frame == "" {
+		renderModel := m
+		renderModel.cancelMouseGesture()
+		frame = renderModel.View().Content
+	}
+	return m.selectedRenderedText(frame)
+}
+
+func (m *appModel) startMousePendingClick(x, y int, overlay overlayKind) {
+	m.mousePendingClick = true
+	m.mousePendingOverlay = overlay
+	m.mouseSelectionStarted = false
+	m.mouseSelectionDragging = false
+	m.mouseSelectionStartX = x
+	m.mouseSelectionStartY = y
+	m.mouseSelectionEndX = x
+	m.mouseSelectionEndY = y
+	m.mouseSelectionFrame = ""
+}
+
+func (m *appModel) cancelMouseGesture() {
+	m.mousePendingClick = false
+	m.mousePendingOverlay = overlayNone
+	m.mouseSelectionStarted = false
+	m.mouseSelectionDragging = false
+	m.mouseSelectionFrame = ""
+}
+
+func (m *appModel) captureMouseSelectionFrame() {
+	renderModel := *m
+	renderModel.cancelMouseGesture()
+	m.mouseSelectionFrame = renderModel.View().Content
+}
+
+func (m appModel) mouseButtonMatchesLeft(button tea.MouseButton) bool {
+	return button == tea.MouseLeft || button == tea.MouseNone
+}
+
+func (m appModel) selectedRenderedText(rendered string) string {
+	lines := strings.Split(rendered, "\n")
+	startX, startY, endX, endY := m.orderedMouseSelection()
+	if startY < 0 {
+		startY = 0
+	}
+	if endY >= len(lines) {
+		endY = len(lines) - 1
+	}
+	if startY > endY || len(lines) == 0 {
+		return ""
+	}
+
+	selected := make([]string, 0, endY-startY+1)
+	for y := startY; y <= endY; y++ {
+		line := lines[y]
+		lineWidth := ansi.StringWidth(line)
+		left := 0
+		right := lineWidth
+		if y == startY {
+			left = startX
+		}
+		if y == endY {
+			right = endX + 1
+		}
+		if left < 0 {
+			left = 0
+		}
+		if right > lineWidth {
+			right = lineWidth
+		}
+		if right < left {
+			right = left
+		}
+		selected = append(selected, ansi.Strip(ansi.Cut(line, left, right)))
+	}
+	return strings.Join(selected, "\n")
+}
+
+func (m appModel) renderMouseSelection(rendered string) string {
+	if !m.mouseSelectionDragging {
+		return rendered
+	}
+	lines := strings.Split(rendered, "\n")
+	startX, startY, endX, endY := m.orderedMouseSelection()
+	if startY < 0 {
+		startY = 0
+	}
+	if endY >= len(lines) {
+		endY = len(lines) - 1
+	}
+	if startY > endY || len(lines) == 0 {
+		return rendered
+	}
+
+	selectionStyle := lipgloss.NewStyle().Reverse(true)
+	for y := startY; y <= endY; y++ {
+		line := lines[y]
+		lineWidth := ansi.StringWidth(line)
+		left := 0
+		right := lineWidth
+		if y == startY {
+			left = startX
+		}
+		if y == endY {
+			right = endX + 1
+		}
+		if left < 0 {
+			left = 0
+		}
+		if right > lineWidth {
+			right = lineWidth
+		}
+		if right <= left {
+			continue
+		}
+		before := ansi.Cut(line, 0, left)
+		mid := ansi.Cut(line, left, right)
+		after := ansi.Cut(line, right, lineWidth)
+		// Strip nested styles so syntax-highlight resets cannot cancel the selection highlight.
+		lines[y] = before + selectionStyle.Render(ansi.Strip(mid)) + after
+	}
+	return strings.Join(lines, "\n")
+}
+
+func (m appModel) orderedMouseSelection() (int, int, int, int) {
+	startX := m.mouseSelectionStartX
+	startY := m.mouseSelectionStartY
+	endX := m.mouseSelectionEndX
+	endY := m.mouseSelectionEndY
+	if startY > endY || (startY == endY && startX > endX) {
+		startX, endX = endX, startX
+		startY, endY = endY, startY
+	}
+	return startX, startY, endX, endY
 }
 
 // handleOverlayClick dispatches clicks to the active overlay, or dismisses it

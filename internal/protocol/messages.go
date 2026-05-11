@@ -1,5 +1,7 @@
 package protocol
 
+import "github.com/josephschmitt/monocle/internal/types"
+
 // Inbound message types (from CLI subcommands to engine via socket)
 const (
 	TypeGetReviewStatus    = "get_review_status"
@@ -9,6 +11,7 @@ const (
 	TypeConnect            = "connect"
 	TypeIdentify           = "identify"
 	TypeAddAdditionalFiles = "add_additional_files"
+	TypeReplyToThread      = "reply_to_thread"
 	TypeMarkActivity       = "mark_activity"
 	TypeAwaitReview        = "await_review"
 )
@@ -22,6 +25,7 @@ const (
 	TypeConnectResponse            = "connect_response"
 	TypeEventNotification          = "event_notification"
 	TypeAddAdditionalFilesResponse = "add_additional_files_response"
+	TypeReplyToThreadResponse      = "reply_to_thread_response"
 	TypeMarkActivityResponse       = "mark_activity_response"
 	TypeAwaitReviewResponse        = "await_review_response"
 )
@@ -129,6 +133,22 @@ type AddAdditionalFilesResponse struct {
 	Success bool   `json:"success"`
 	Message string `json:"message,omitempty"`
 	Count   int    `json:"count"`
+}
+
+// ReplyToThreadMsg lets an agent answer a reviewer comment thread.
+type ReplyToThreadMsg struct {
+	Type      string `json:"type"`
+	CommentID string `json:"comment_id"`
+	Author    string `json:"author,omitempty"`
+	Body      string `json:"body"`
+}
+
+// ReplyToThreadResponse acknowledges an agent thread reply.
+type ReplyToThreadResponse struct {
+	Type    string              `json:"type"`
+	Success bool                `json:"success"`
+	Message string              `json:"message,omitempty"`
+	Reply   *types.CommentReply `json:"reply,omitempty"`
 }
 
 // MarkActivityMsg notifies the engine that a write-tool just fired in the

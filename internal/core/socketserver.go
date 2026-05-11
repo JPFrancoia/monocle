@@ -43,6 +43,13 @@ type SocketServer struct {
 	shutdownCh       chan struct{} // closes when idle timer fires
 }
 
+type socketClientRole int
+
+const (
+	socketRoleAgent socketClientRole = iota
+	socketRoleFrontend
+)
+
 // NewSocketServer creates a new SocketServer. Call SetEngine and Start before use.
 func NewSocketServer() *SocketServer {
 	return &SocketServer{
@@ -261,7 +268,7 @@ func (s *SocketServer) handleConnection(conn net.Conn) {
 		conn.Close()
 	}()
 
-	response := s.handleMessage(msg)
+	response := s.handleMessage(msg, socketRoleAgent)
 	if response == nil {
 		return
 	}
@@ -367,7 +374,11 @@ func (s *SocketServer) handleSubscription(conn net.Conn, scanner *bufio.Scanner,
 			continue
 		}
 
-		response := s.handleMessage(msg)
+		role := socketRoleAgent
+		if sub.ClientKind == protocol.SubscribeClientFrontend {
+			role = socketRoleFrontend
+		}
+		response := s.handleMessage(msg, role)
 		if response != nil {
 			_ = writeMsg(response)
 		}
@@ -461,7 +472,7 @@ func (s *SocketServer) handleQueuedConnection(conn net.Conn, scanner *bufio.Scan
 			continue
 		}
 
-		response := s.handleMessage(msg)
+		response := s.handleMessage(msg, socketRoleAgent)
 		if response != nil {
 			_ = writeMsg(response)
 		}
@@ -469,7 +480,13 @@ func (s *SocketServer) handleQueuedConnection(conn net.Conn, scanner *bufio.Scan
 }
 
 // handleMessage routes a decoded message to the appropriate engine handler.
-func (s *SocketServer) handleMessage(msg any) any {
+func (s *SocketServer) handleMessage(msg any, role socketClientRole) any {
+	if role != socketRoleFrontend {
+		if response := reviewerOnlyResponse(msg); response != nil {
+			return response
+		}
+	}
+
 	switch m := msg.(type) {
 	case *protocol.GetReviewStatusMsg:
 		return s.engine.handleGetReviewStatus(m)
@@ -479,6 +496,8 @@ func (s *SocketServer) handleMessage(msg any) any {
 		return s.engine.handleSubmitContent(m)
 	case *protocol.AddAdditionalFilesMsg:
 		return s.engine.handleAddAdditionalFiles(m)
+	case *protocol.ReplyToThreadMsg:
+		return s.engine.handleReplyToThread(m)
 	case *protocol.MarkActivityMsg:
 		return s.engine.handleMarkActivity(m)
 	case *protocol.AwaitReviewMsg:
@@ -594,6 +613,59 @@ func (s *SocketServer) handleMessage(msg any) any {
 	default:
 		return nil
 	}
+}
+
+func reviewerOnlyResponse(msg any) any {
+	errorFor := func(operation string) string {
+		return operation + " is only available to the reviewer UI"
+	}
+	switch msg.(type) {
+	case *protocol.StartSessionMsg:
+		return &protocol.StartSessionResponse{Type: protocol.TypeStartSessionResponse, Error: errorFor(protocol.TypeStartSession)}
+	case *protocol.ResumeSessionMsg:
+		return &protocol.ResumeSessionResponse{Type: protocol.TypeResumeSessionResponse, Error: errorFor(protocol.TypeResumeSession)}
+	case *protocol.RefreshChangedFilesMsg:
+		return &protocol.RefreshChangedFilesResponse{Type: protocol.TypeRefreshChangedFilesResponse, Error: errorFor(protocol.TypeRefreshChangedFiles)}
+	case *protocol.DismissArtifactMsg:
+		return &protocol.DismissArtifactResponse{Type: protocol.TypeDismissArtifactResponse, Error: errorFor(protocol.TypeDismissArtifact)}
+	case *protocol.AddCommentMsg:
+		return &protocol.AddCommentResponse{Type: protocol.TypeAddCommentResponse, Error: errorFor(protocol.TypeAddComment)}
+	case *protocol.EditCommentMsg:
+		return &protocol.EditCommentResponse{Type: protocol.TypeEditCommentResponse, Error: errorFor(protocol.TypeEditComment)}
+	case *protocol.DeleteCommentMsg:
+		return &protocol.DeleteCommentResponse{Type: protocol.TypeDeleteCommentResponse, Error: errorFor(protocol.TypeDeleteComment)}
+	case *protocol.ResolveCommentMsg:
+		return &protocol.ResolveCommentResponse{Type: protocol.TypeResolveCommentResponse, Error: errorFor(protocol.TypeResolveComment)}
+	case *protocol.ClearCommentsMsg:
+		return &protocol.ClearCommentsResponse{Type: protocol.TypeClearCommentsResponse, Error: errorFor(protocol.TypeClearComments)}
+	case *protocol.ClearReviewMsg:
+		return &protocol.ClearReviewResponse{Type: protocol.TypeClearReviewResponse, Error: errorFor(protocol.TypeClearReview)}
+	case *protocol.MarkReviewedMsg:
+		return &protocol.MarkReviewedResponse{Type: protocol.TypeMarkReviewedResponse, Error: errorFor(protocol.TypeMarkReviewed)}
+	case *protocol.UnmarkReviewedMsg:
+		return &protocol.UnmarkReviewedResponse{Type: protocol.TypeUnmarkReviewedResponse, Error: errorFor(protocol.TypeUnmarkReviewed)}
+	case *protocol.MarkContentReviewedMsg:
+		return &protocol.MarkContentReviewedResponse{Type: protocol.TypeMarkContentReviewedResponse, Error: errorFor(protocol.TypeMarkContentReviewed)}
+	case *protocol.UnmarkContentReviewedMsg:
+		return &protocol.UnmarkContentReviewedResponse{Type: protocol.TypeUnmarkContentReviewedResponse, Error: errorFor(protocol.TypeUnmarkContentReviewed)}
+	case *protocol.ResetAllReviewedMsg:
+		return &protocol.ResetAllReviewedResponse{Type: protocol.TypeResetAllReviewedResponse, Error: errorFor(protocol.TypeResetAllReviewed)}
+	case *protocol.MarkAllReviewedMsg:
+		return &protocol.MarkAllReviewedResponse{Type: protocol.TypeMarkAllReviewedResponse, Error: errorFor(protocol.TypeMarkAllReviewed)}
+	case *protocol.SubmitMsg:
+		return &protocol.SubmitResponse{Type: protocol.TypeSubmitResponse, Error: errorFor(protocol.TypeSubmit)}
+	case *protocol.SetBaseRefMsg:
+		return &protocol.SetBaseRefResponse{Type: protocol.TypeSetBaseRefResponse, Error: errorFor(protocol.TypeSetBaseRef)}
+	case *protocol.SetAutoAdvanceRefMsg:
+		return &protocol.SetAutoAdvanceRefResponse{Type: protocol.TypeSetAutoAdvanceRefResponse, Error: errorFor(protocol.TypeSetAutoAdvanceRef)}
+	case *protocol.SetSnapshotBaseMsg:
+		return &protocol.SetSnapshotBaseResponse{Type: protocol.TypeSetSnapshotBaseResponse, Error: errorFor(protocol.TypeSetSnapshotBase)}
+	case *protocol.ClearSnapshotBaseMsg:
+		return &protocol.ClearSnapshotBaseResponse{Type: protocol.TypeClearSnapshotBaseResponse, Error: errorFor(protocol.TypeClearSnapshotBase)}
+	case *protocol.SaveConfigMsg:
+		return &protocol.SaveConfigResponse{Type: protocol.TypeSaveConfigResponse, Error: errorFor(protocol.TypeSaveConfig)}
+	}
+	return nil
 }
 
 // handleIdentify processes an agent self-identification message and emits a

@@ -14,5 +14,9 @@
   {
     "name": "add_files",
     "description": "Add file paths to the current Monocle review session."
+  },
+  {
+    "name": "reply_to_thread",
+    "description": "Reply to a Monocle review comment thread. Use this to answer reviewer questions or explain what changed after addressing a comment. This tool cannot resolve threads."
   }
 ]

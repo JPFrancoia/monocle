@@ -16,9 +16,10 @@ type CommentType string
 
 const (
 	CommentIssue      CommentType = "issue"
+	CommentQuestion   CommentType = "question"
 	CommentSuggestion CommentType = "suggestion"
 	CommentNote       CommentType = "note"
-	CommentPraise     CommentType = "praise"
+	CommentPraise     CommentType = "praise" // legacy value; no longer exposed in the TUI
 )
 
 type TargetType string
@@ -103,9 +104,19 @@ type ReviewComment struct {
 	Body        string
 	CodeSnippet string
 	Resolved    bool
+	Replies     []CommentReply
 	ReviewRound int
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
+}
+
+type CommentReply struct {
+	ID        string
+	CommentID string
+	Author    string
+	Body      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type ReviewSubmission struct {
@@ -154,6 +165,7 @@ type ReviewSummary struct {
 	ContentComments        map[string][]ReviewComment // item id -> comments
 	AdditionalFileComments map[string][]ReviewComment // additional file path -> comments
 	IssueCt                int
+	QuestionCt             int
 	SuggestionCt           int
 	NoteCt                 int
 	PraiseCt               int

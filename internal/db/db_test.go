@@ -449,6 +449,52 @@ func TestDeleteComment(t *testing.T) {
 	}
 }
 
+func TestCreateCommentReplyLoadedWithComments(t *testing.T) {
+	d := testDB(t)
+	now := time.Now()
+	d.CreateSession(&types.ReviewSession{ID: "sess-1", Agent: "claude", RepoRoot: "/tmp", BaseRef: "abc", ReviewRound: 1, CreatedAt: now, UpdatedAt: now})
+
+	c := &types.ReviewComment{
+		ID:          "cmt-1",
+		TargetType:  types.TargetFile,
+		TargetRef:   "main.go",
+		Type:        types.CommentQuestion,
+		Body:        "Why this approach?",
+		ReviewRound: 1,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := d.CreateComment("sess-1", c); err != nil {
+		t.Fatalf("create comment: %v", err)
+	}
+
+	reply := &types.CommentReply{
+		ID:        "reply-1",
+		CommentID: "cmt-1",
+		Author:    "agent",
+		Body:      "Because it keeps the change local.",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := d.CreateCommentReply("sess-1", reply); err != nil {
+		t.Fatalf("create reply: %v", err)
+	}
+
+	comments, err := d.GetComments("sess-1")
+	if err != nil {
+		t.Fatalf("get comments: %v", err)
+	}
+	if len(comments) != 1 {
+		t.Fatalf("expected 1 comment, got %d", len(comments))
+	}
+	if len(comments[0].Replies) != 1 {
+		t.Fatalf("expected 1 reply, got %d", len(comments[0].Replies))
+	}
+	if comments[0].Replies[0].Body != reply.Body {
+		t.Errorf("reply body = %q, want %q", comments[0].Replies[0].Body, reply.Body)
+	}
+}
+
 func TestClearComments(t *testing.T) {
 	d := testDB(t)
 	now := time.Now()

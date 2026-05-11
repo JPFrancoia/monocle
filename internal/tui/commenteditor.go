@@ -55,6 +55,10 @@ func (m commentEditorModel) Update(msg tea.Msg) (commentEditorModel, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case tea.PasteMsg:
+		if msg.Content != "" {
+			m.insertAtCursor(msg.Content)
+		}
 	case tea.KeyPressMsg:
 		switch msg.String() {
 		case "esc":
@@ -81,12 +85,12 @@ func (m commentEditorModel) Update(msg tea.Msg) (commentEditorModel, tea.Cmd) {
 			// Cycle comment type
 			switch m.commentType {
 			case types.CommentIssue:
+				m.commentType = types.CommentQuestion
+			case types.CommentQuestion:
 				m.commentType = types.CommentSuggestion
 			case types.CommentSuggestion:
 				m.commentType = types.CommentNote
 			case types.CommentNote:
-				m.commentType = types.CommentPraise
-			case types.CommentPraise:
 				m.commentType = types.CommentIssue
 			}
 		case "backspace":
@@ -391,9 +395,9 @@ func (m commentEditorModel) View() string {
 		color color.Color
 	}{
 		{types.CommentIssue, "ISSUE", lipgloss.Color("1")},
+		{types.CommentQuestion, "QUESTION", lipgloss.Color("5")},
 		{types.CommentSuggestion, "SUGGESTION", lipgloss.Color("3")},
 		{types.CommentNote, "NOTE", lipgloss.Color("4")},
-		{types.CommentPraise, "PRAISE", lipgloss.Color("2")},
 	}
 	for i, tl := range typeLabels {
 		var style lipgloss.Style
@@ -472,9 +476,9 @@ func (m *commentEditorModel) handleClick(contentX, contentY int) bool {
 		label string
 	}{
 		{types.CommentIssue, "ISSUE"},
+		{types.CommentQuestion, "QUESTION"},
 		{types.CommentSuggestion, "SUGGESTION"},
 		{types.CommentNote, "NOTE"},
-		{types.CommentPraise, "PRAISE"},
 	}
 
 	x := 0

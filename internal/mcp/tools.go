@@ -23,8 +23,8 @@ type toolDef struct {
 }
 
 var (
-	toolsOnce    sync.Once
-	toolDescMap  map[string]string
+	toolsOnce   sync.Once
+	toolDescMap map[string]string
 )
 
 // toolDescriptions returns a map of tool name → description loaded from tools.json.
@@ -64,6 +64,11 @@ func registerTools(s *sdkmcp.Server) {
 		Name:        "add_files",
 		Description: desc["add_files"],
 	}, handleAddFiles)
+
+	sdkmcp.AddTool(s, &sdkmcp.Tool{
+		Name:        "reply_to_thread",
+		Description: desc["reply_to_thread"],
+	}, handleReplyToThread)
 }
 
 // -- Tool parameter types --
@@ -84,6 +89,11 @@ type sendArtifactParams struct {
 
 type addFilesParams struct {
 	Paths []string `json:"paths"`
+}
+
+type replyToThreadParams struct {
+	CommentID string `json:"comment_id"`
+	Body      string `json:"body"`
 }
 
 // -- Tool handlers --
@@ -199,6 +209,32 @@ func handleAddFiles(ctx context.Context, req *sdkmcp.CallToolRequest, params add
 
 	add := resp.(*protocol.AddAdditionalFilesResponse)
 	return textResult(add.Message), nil, nil
+}
+
+func handleReplyToThread(ctx context.Context, req *sdkmcp.CallToolRequest, params replyToThreadParams) (*sdkmcp.CallToolResult, any, error) {
+	c, err := client.ConnectDefault()
+	if err != nil {
+		return errResult("connect: %v", err), nil, nil
+	}
+	defer c.Close()
+
+	resp, err := c.Request(
+		&protocol.ReplyToThreadMsg{
+			Type:      protocol.TypeReplyToThread,
+			CommentID: params.CommentID,
+			Body:      params.Body,
+		},
+		client.DefaultTimeout,
+	)
+	if err != nil {
+		return errResult("request: %v", err), nil, nil
+	}
+
+	reply := resp.(*protocol.ReplyToThreadResponse)
+	if !reply.Success {
+		return errResult("reply: %s", reply.Message), nil, nil
+	}
+	return textResult(reply.Message), nil, nil
 }
 
 // -- Helpers --

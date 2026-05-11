@@ -75,7 +75,7 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 	}
 
 	// Count by type
-	issueCt, suggestionCt, noteCt, praiseCt := countByType(comments)
+	counts := countByType(comments)
 
 	// Group comments by target
 	fileComments := map[string][]types.ReviewComment{}
@@ -109,6 +109,7 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 
 			typeLabel := strings.ToUpper(string(c.Type))
 			b.WriteString(fmt.Sprintf("### [%s] %s%s\n", typeLabel, path, lineRef))
+			b.WriteString(fmt.Sprintf("Thread ID: `%s`\n\n", c.ID))
 
 			// Code snippet
 			if rf.formatCfg.IncludeSnippets {
@@ -124,7 +125,7 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 				})
 			}
 
-			b.WriteString(c.Body)
+			rf.writeThreadBody(&b, c)
 			b.WriteString("\n\n---\n\n")
 		}
 	}
@@ -160,6 +161,7 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 				header = fmt.Sprintf("### [%s] Content: %s%s\n", typeLabel, itemID, lineRef)
 			}
 			b.WriteString(header)
+			b.WriteString(fmt.Sprintf("Thread ID: `%s`\n\n", c.ID))
 
 			// Snippet from content item
 			if rf.formatCfg.IncludeSnippets {
@@ -180,7 +182,7 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 				})
 			}
 
-			b.WriteString(c.Body)
+			rf.writeThreadBody(&b, c)
 			b.WriteString("\n\n---\n\n")
 		}
 	}
@@ -200,6 +202,7 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 			}
 
 			b.WriteString(fmt.Sprintf("### [%s] Additional: %s%s\n", typeLabel, filePath, lineRef))
+			b.WriteString(fmt.Sprintf("Thread ID: `%s`\n\n", c.ID))
 
 			if rf.formatCfg.IncludeSnippets {
 				filePathCopy := filePath
@@ -220,7 +223,7 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 				})
 			}
 
-			b.WriteString(c.Body)
+			rf.writeThreadBody(&b, c)
 			b.WriteString("\n\n---\n\n")
 		}
 	}
@@ -229,23 +232,26 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 	if hasComments && rf.formatCfg.IncludeSummary {
 		b.WriteString("**Summary:** ")
 		parts := []string{}
-		if issueCt > 0 {
-			parts = append(parts, fmt.Sprintf("%d issue(s) to fix", issueCt))
+		if counts.issue > 0 {
+			parts = append(parts, fmt.Sprintf("%d issue(s) to fix", counts.issue))
 		}
-		if suggestionCt > 0 {
-			parts = append(parts, fmt.Sprintf("%d suggestion(s) to consider", suggestionCt))
+		if counts.question > 0 {
+			parts = append(parts, fmt.Sprintf("%d question(s) to answer", counts.question))
 		}
-		if noteCt > 0 {
-			parts = append(parts, fmt.Sprintf("%d note(s)", noteCt))
+		if counts.suggestion > 0 {
+			parts = append(parts, fmt.Sprintf("%d suggestion(s) to consider", counts.suggestion))
 		}
-		if praiseCt > 0 {
-			parts = append(parts, fmt.Sprintf("%d praise", praiseCt))
+		if counts.note > 0 {
+			parts = append(parts, fmt.Sprintf("%d note(s)", counts.note))
+		}
+		if counts.praise > 0 {
+			parts = append(parts, fmt.Sprintf("%d praise", counts.praise))
 		}
 		b.WriteString(strings.Join(parts, ", "))
 		b.WriteString(".\n")
 
-		if issueCt > 0 {
-			b.WriteString("Please address the issues and re-present your changes.\n")
+		if counts.issue > 0 || counts.question > 0 {
+			b.WriteString("Please address the issues, answer questions in their threads, and re-present your changes.\n")
 		}
 	}
 
@@ -253,6 +259,21 @@ func (rf *ReviewFormatter) Format(session *types.ReviewSession, comments []types
 		Formatted:    b.String(),
 		CommentCount: len(comments),
 		Action:       string(action),
+	}
+}
+
+func (rf *ReviewFormatter) writeThreadBody(b *strings.Builder, c types.ReviewComment) {
+	b.WriteString(c.Body)
+	if len(c.Replies) == 0 {
+		return
+	}
+	b.WriteString("\n\nThread replies:\n")
+	for _, r := range c.Replies {
+		author := r.Author
+		if author == "" {
+			author = "agent"
+		}
+		b.WriteString(fmt.Sprintf("\n- %s: %s", author, strings.TrimSpace(r.Body)))
 	}
 }
 
@@ -302,21 +323,32 @@ func truncateSnippet(snippet string, maxLines int) string {
 	return result
 }
 
-func countByType(comments []types.ReviewComment) (issue, suggestion, note, praise int) {
+type commentTypeCounts struct {
+	issue      int
+	question   int
+	suggestion int
+	note       int
+	praise     int
+}
+
+func countByType(comments []types.ReviewComment) commentTypeCounts {
+	var counts commentTypeCounts
 	for _, c := range comments {
 		if c.Resolved {
 			continue
 		}
 		switch c.Type {
 		case types.CommentIssue:
-			issue++
+			counts.issue++
+		case types.CommentQuestion:
+			counts.question++
 		case types.CommentSuggestion:
-			suggestion++
+			counts.suggestion++
 		case types.CommentNote:
-			note++
+			counts.note++
 		case types.CommentPraise:
-			praise++
+			counts.praise++
 		}
 	}
-	return
+	return counts
 }

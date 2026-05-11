@@ -275,6 +275,70 @@ func TestEditComment(t *testing.T) {
 	}
 }
 
+func TestAddCommentReply(t *testing.T) {
+	database, err := db.Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer database.Close()
+	e := &Engine{
+		database:    database,
+		feedback:    NewFeedbackQueue(),
+		subscribers: make(map[EventKind]map[int]EventCallback),
+	}
+	e.current = &types.ReviewSession{
+		ID:          "sess-1",
+		ReviewRound: 1,
+	}
+	now := time.Now()
+	if err := database.CreateSession(&types.ReviewSession{ID: "sess-1", Agent: "claude", RepoRoot: "/tmp", BaseRef: "abc", ReviewRound: 1, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("CreateSession: %v", err)
+	}
+
+	comment, err := e.AddComment(CommentTarget{TargetType: types.TargetFile, TargetRef: "main.go", LineStart: 5, LineEnd: 5}, types.CommentQuestion, "Why this?")
+	if err != nil {
+		t.Fatalf("AddComment: %v", err)
+	}
+
+	reply, err := e.AddCommentReply(comment.ID, "agent", "I changed it to keep the fix local.")
+	if err != nil {
+		t.Fatalf("AddCommentReply: %v", err)
+	}
+	if reply.CommentID != comment.ID {
+		t.Errorf("reply CommentID = %q, want %q", reply.CommentID, comment.ID)
+	}
+	if len(e.current.Comments[0].Replies) != 1 {
+		t.Fatalf("expected in-memory reply, got %d", len(e.current.Comments[0].Replies))
+	}
+
+	comments, err := database.GetComments("sess-1")
+	if err != nil {
+		t.Fatalf("GetComments: %v", err)
+	}
+	if len(comments[0].Replies) != 1 {
+		t.Fatalf("expected DB reply, got %d", len(comments[0].Replies))
+	}
+	if !comments[0].UpdatedAt.After(comment.UpdatedAt) {
+		t.Fatalf("comment updated_at = %v, want after %v", comments[0].UpdatedAt, comment.UpdatedAt)
+	}
+
+	previousRoundComment, err := e.AddComment(CommentTarget{TargetType: types.TargetFile, TargetRef: "main.go", LineStart: 8, LineEnd: 8}, types.CommentQuestion, "Still open?")
+	if err != nil {
+		t.Fatalf("AddComment previous round: %v", err)
+	}
+	e.current.ReviewRound++
+	if _, err := e.AddCommentReply(previousRoundComment.ID, "agent", "Still valid after the next round."); err != nil {
+		t.Fatalf("AddCommentReply previous round: %v", err)
+	}
+
+	if err := e.ResolveComment(comment.ID); err != nil {
+		t.Fatalf("ResolveComment: %v", err)
+	}
+	if _, err := e.AddCommentReply(comment.ID, "agent", "Late reply"); err == nil {
+		t.Fatal("expected resolved comment reply to fail")
+	}
+}
+
 func TestDeleteComment(t *testing.T) {
 	database, err := db.Open(":memory:")
 	if err != nil {
@@ -718,11 +782,21 @@ func TestSubmitRequestChangesRequiresContent(t *testing.T) {
 
 	t.Run("reject request_changes with only resolved comments", func(t *testing.T) {
 		setup([]types.ReviewComment{
-			{ID: "c1", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Bug", Resolved: true},
+			{ID: "c1", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Bug", Resolved: true, ReviewRound: 1},
 		})
 		_, err := e.Submit(types.ActionRequestChanges, "")
 		if err == nil {
 			t.Error("expected error for request_changes with only resolved comments")
+		}
+	})
+
+	t.Run("reject request_changes with only previous-round comments", func(t *testing.T) {
+		setup([]types.ReviewComment{
+			{ID: "c1", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Old bug", ReviewRound: 0},
+		})
+		_, err := e.Submit(types.ActionRequestChanges, "")
+		if err == nil {
+			t.Error("expected error for request_changes with only previous-round comments")
 		}
 	})
 
@@ -736,7 +810,7 @@ func TestSubmitRequestChangesRequiresContent(t *testing.T) {
 
 	t.Run("accept request_changes with unresolved comment", func(t *testing.T) {
 		setup([]types.ReviewComment{
-			{ID: "c1", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Bug"},
+			{ID: "c1", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Bug", ReviewRound: 1},
 		})
 		_, err := e.Submit(types.ActionRequestChanges, "")
 		if err != nil {
@@ -761,11 +835,13 @@ func TestGetReviewSummaryExcludesResolved(t *testing.T) {
 	e.current = &types.ReviewSession{
 		ID:           "sess-1",
 		FileStatuses: make(map[string]bool),
+		ReviewRound:  2,
 		Comments: []types.ReviewComment{
-			{ID: "c1", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Bug"},
-			{ID: "c2", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Resolved bug", Resolved: true},
-			{ID: "c3", TargetType: types.TargetFile, TargetRef: "util.go", Type: types.CommentSuggestion, Body: "Resolved suggestion", Resolved: true},
-			{ID: "c4", TargetType: types.TargetContent, TargetRef: "plan-1", Type: types.CommentNote, Body: "Note"},
+			{ID: "c1", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Bug", ReviewRound: 2},
+			{ID: "c2", TargetType: types.TargetFile, TargetRef: "main.go", Type: types.CommentIssue, Body: "Resolved bug", Resolved: true, ReviewRound: 2},
+			{ID: "c3", TargetType: types.TargetFile, TargetRef: "util.go", Type: types.CommentSuggestion, Body: "Resolved suggestion", Resolved: true, ReviewRound: 2},
+			{ID: "c4", TargetType: types.TargetContent, TargetRef: "plan-1", Type: types.CommentNote, Body: "Note", ReviewRound: 2},
+			{ID: "c5", TargetType: types.TargetFile, TargetRef: "old.go", Type: types.CommentQuestion, Body: "Old question", ReviewRound: 1},
 		},
 	}
 
@@ -783,6 +859,9 @@ func TestGetReviewSummaryExcludesResolved(t *testing.T) {
 	if summary.NoteCt != 1 {
 		t.Errorf("expected 1 note, got %d", summary.NoteCt)
 	}
+	if summary.QuestionCt != 0 {
+		t.Errorf("expected 0 questions, got %d", summary.QuestionCt)
+	}
 
 	// Resolved comments should not appear in file groupings
 	mainComments := summary.FileComments["main.go"]
@@ -791,6 +870,9 @@ func TestGetReviewSummaryExcludesResolved(t *testing.T) {
 	}
 	if _, ok := summary.FileComments["util.go"]; ok {
 		t.Error("expected no comments on util.go (all resolved)")
+	}
+	if _, ok := summary.FileComments["old.go"]; ok {
+		t.Error("expected no comments on old.go (previous round excluded)")
 	}
 }
 

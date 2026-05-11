@@ -58,6 +58,7 @@ Local CLI/TUI review companion for AI coding agents. Everything is local: Unix s
 
 ## Conventions
 
+- After finishing a Go feature implementation, run the `go-reviewer` agent on the current git diff before reporting completion.
 - Wrap errors with context: `fmt.Errorf("description: %w", err)`.
 - Tests are white-box and co-located; DB tests use `:memory:`, git tests use `setupTestRepo(t)`, and filesystem/config tests should isolate with `t.TempDir()` and `t.Setenv()`.
 - DB schema lives in `internal/db/schema.go`; bump `schemaVersion` when changing `schemaSQL` and add query tests. Current migrations recreate stale schemas, so do not assume persisted backwards compatibility unless requested.

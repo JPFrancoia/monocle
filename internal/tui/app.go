@@ -65,6 +65,10 @@ type fileChangedMsg struct {
 
 type submitErrorMsg struct{}
 
+type mouseCopyResultMsg struct {
+	err string
+}
+
 type feedbackStatusMsg struct {
 	status string
 }
@@ -232,6 +236,16 @@ type appModel struct {
 
 	mouseEnabled bool // whether mouse mode is active
 	minDiffWidth int  // minimum diff viewer content width in horizontal layout
+
+	mousePendingClick      bool
+	mousePendingOverlay    overlayKind
+	mouseSelectionStarted  bool
+	mouseSelectionDragging bool
+	mouseSelectionStartX   int
+	mouseSelectionStartY   int
+	mouseSelectionEndX     int
+	mouseSelectionEndY     int
+	mouseSelectionFrame    string
 
 	showSessionPicker bool   // open session picker on startup
 	repoRoot          string // repo root for session listing
@@ -586,6 +600,17 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 			return m, nil
+		}
+		if msg.path != "" {
+			if m.diffView.contentID == msg.path {
+				return m, m.handleSidebarSelect(sidebarSelectMsg{isContent: true, contentID: msg.path})
+			}
+			if m.diffView.additionalFilePath == msg.path {
+				return m, m.handleSidebarSelect(sidebarSelectMsg{path: msg.path, isAdditionalFile: true})
+			}
+			if m.diffView.path == msg.path {
+				return m, m.handleSidebarSelect(sidebarSelectMsg{path: msg.path})
+			}
 		}
 		// Auto-select first file if the current view is empty or stale
 		if len(m.sidebar.files) > 0 && !m.diffViewShowsValidFile() {
@@ -1115,6 +1140,14 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.feedbackStatus = "copy_failed"
 		return m, nil
 
+	case mouseCopyResultMsg:
+		if msg.err != "" {
+			m.statusBar.feedbackStatus = "copy_failed"
+		} else {
+			m.statusBar.feedbackStatus = "copied"
+		}
+		return m, nil
+
 	case submitErrorMsg:
 		m.statusBar.feedbackStatus = "submit_failed"
 		return m, nil
@@ -1133,26 +1166,15 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.statusBar.baseRef = m.displayBaseRef(session)
 		}
 
-		// Feedback is queued for pull delivery. Clear comments (they're frozen in
-		// the submission) but don't advance the round or clear content items —
-		// that happens when the agent pulls.
+		// Feedback is queued for pull delivery. Threads stay visible until the
+		// reviewer resolves or deletes them; round advancement happens when the
+		// agent pulls.
 		if !msg.agentConnected {
 			count := m.engine.GetQueuedCount()
 			if count == 1 {
 				m.statusBar.feedbackStatus = "1 review queued"
 			} else {
 				m.statusBar.feedbackStatus = fmt.Sprintf("%d reviews queued", count)
-			}
-
-			// Clear comments — they're now frozen in the submission record
-			if session != nil && len(session.Comments) > 0 {
-				_ = m.engine.ClearComments()
-				m.statusBar.commentCount = 0
-			}
-
-			// Reload diff view to remove inline comment annotations
-			if m.diffView.path != "" {
-				m.diffView.comments = nil
 			}
 
 			// Restore focus mode state
@@ -1168,11 +1190,6 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.syncArtifactsAfterSubmit(session)
-
-		if session != nil && len(session.Comments) > 0 {
-			_ = m.engine.ClearComments()
-			m.statusBar.commentCount = 0
-		}
 
 		// Restore focus mode state
 		if m.focusModeActive {
@@ -1199,7 +1216,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncArtifactsAfterSubmit(session)
 
 		if session != nil {
-			m.statusBar.commentCount = 0
+			m.statusBar.commentCount = len(session.Comments)
 			m.statusBar.fileCount = len(session.ChangedFiles)
 		}
 
@@ -1397,9 +1414,17 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.reportWakaTimeActivity(m.currentWakaTimeTarget())
 		return m.handleKey(msg)
 
+	case tea.PasteMsg:
+		m.reportWakaTimeActivity(m.currentWakaTimeTarget())
+		return m.handlePaste(msg.Content)
+
 	case tea.MouseClickMsg:
 		if m.mouseEnabled {
 			m.reportWakaTimeActivity(m.currentWakaTimeTarget())
+			if msg.Button == tea.MouseLeft {
+				m.startMousePendingClick(msg.X, msg.Y, m.overlay)
+				return m, nil
+			}
 			return m.handleMouseClick(msg)
 		}
 	case tea.MouseWheelMsg:
@@ -1409,7 +1434,9 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.MouseMotionMsg:
 		if m.mouseEnabled {
-			m.reportWakaTimeActivity(m.currentWakaTimeTarget())
+			if m.mousePendingClick || m.mouseSelectionStarted {
+				m.reportWakaTimeActivity(m.currentWakaTimeTarget())
+			}
 			return m.handleMouseMotion(msg)
 		}
 	case tea.MouseReleaseMsg:
@@ -1429,6 +1456,16 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // handleKey processes keyboard input when no overlay is active.
 func (m appModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.hasMouseSelection() {
+		switch msg.Keystroke() {
+		case "ctrl+c":
+			return m.copyMouseSelection()
+		case "esc":
+			m.cancelMouseGesture()
+			return m, nil
+		}
+	}
+
 	// If an overlay is active, route key to the overlay.
 	if m.overlay == overlayComment {
 		var cmd tea.Cmd
@@ -1842,6 +1879,28 @@ func (m appModel) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+func (m appModel) handlePaste(content string) (tea.Model, tea.Cmd) {
+	if content == "" {
+		return m, nil
+	}
+	if m.overlay == overlayComment {
+		var cmd tea.Cmd
+		m.commentEditor, cmd = m.commentEditor.Update(tea.PasteMsg{Content: content})
+		return m, cmd
+	}
+	if m.overlay == overlayReview {
+		var cmd tea.Cmd
+		m.reviewSummary, cmd = m.reviewSummary.Update(tea.PasteMsg{Content: content})
+		return m, cmd
+	}
+	if m.commandMode {
+		m.commandBuffer += content
+		m.statusBar.commandBuffer = m.commandBuffer
+		return m, nil
+	}
+	return m, nil
+}
+
 // handleCommandModeKey processes keystrokes while in command mode.
 func (m appModel) handleCommandModeKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
@@ -1908,7 +1967,7 @@ func (m appModel) executeCommand(cmd string) tea.Cmd {
 			// Auto-detect action: request_changes if issues/suggestions, approve otherwise
 			action := types.ActionApprove
 			summary, _ := engine.GetReviewSummary()
-			if summary != nil && (summary.IssueCt+summary.SuggestionCt > 0) {
+			if summary != nil && (summary.IssueCt+summary.QuestionCt+summary.SuggestionCt > 0) {
 				action = types.ActionRequestChanges
 			}
 			result, err := engine.Submit(action, "")
@@ -2242,16 +2301,13 @@ func (m appModel) sidebarHasItems() bool {
 }
 
 // syncArtifactsAfterSubmit refreshes the sidebar's artifact list from the
-// session so it reflects reviewed-state changes applied during submit, and
-// clears inline comment annotations from the active view (comments are
-// frozen in the submission record once submitted).
+// session so it reflects reviewed-state changes applied during submit.
 func (m *appModel) syncArtifactsAfterSubmit(session *types.ReviewSession) {
 	if session != nil {
 		m.sidebar.contentItems = session.ContentItems
 	}
 	m.sidebar.rebuildTree()
 	m.sidebar.clampOffset()
-	m.diffView.comments = nil
 }
 
 // autoToggleSidebar hides the sidebar when it has no items, or shows it when
@@ -2724,11 +2780,35 @@ func commentsChanged(next, prev []types.ReviewComment) bool {
 	}
 	for i, c := range next {
 		p := prev[i]
-		if c.ID != p.ID || c.Body != p.Body || c.Resolved != p.Resolved {
+		if c.ID != p.ID || c.Body != p.Body || c.Resolved != p.Resolved || len(c.Replies) != len(p.Replies) {
 			return true
+		}
+		for j, r := range c.Replies {
+			pr := p.Replies[j]
+			if r.ID != pr.ID || r.Body != pr.Body || r.Author != pr.Author {
+				return true
+			}
 		}
 	}
 	return false
+}
+
+func buildThreadMarkers(session *types.ReviewSession) map[string]threadMarkerState {
+	if session == nil || len(session.Comments) == 0 {
+		return nil
+	}
+	markers := make(map[string]threadMarkerState)
+	for _, c := range session.Comments {
+		key := threadMarkerKey(c.TargetType, c.TargetRef)
+		if !c.Resolved {
+			markers[key] = threadMarkerOpen
+			continue
+		}
+		if markers[key] == threadMarkerNone {
+			markers[key] = threadMarkerResolved
+		}
+	}
+	return markers
 }
 
 type refreshResultMsg struct {
@@ -2754,6 +2834,10 @@ type loadContentMsg struct {
 
 // View renders the full TUI layout.
 func (m appModel) View() tea.View {
+	if m.engine != nil {
+		m.sidebar.threadMarkers = buildThreadMarkers(m.engine.GetSession())
+	}
+
 	titleBar := m.renderTitleBar()
 
 	sidebarStyle := m.theme.SidebarBorder
@@ -2884,11 +2968,12 @@ func (m appModel) View() tea.View {
 			full = overlayOn(full, overlayContent, m.width, m.height)
 		}
 	}
+	full = m.renderMouseSelection(full)
 
 	v := tea.NewView(full)
 	v.AltScreen = true
 	if m.mouseEnabled {
-		v.MouseMode = tea.MouseModeCellMotion
+		v.MouseMode = tea.MouseModeAllMotion
 	}
 	return v
 }

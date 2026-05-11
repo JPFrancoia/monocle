@@ -1064,6 +1064,8 @@ func (m diffViewModel) renderCommentLine(line diffViewLine, selected bool) strin
 		switch line.comment.Type {
 		case types.CommentIssue:
 			clr = lipgloss.Color("1")
+		case types.CommentQuestion:
+			clr = lipgloss.Color("5")
 		case types.CommentSuggestion:
 			clr = lipgloss.Color("3")
 		case types.CommentNote:
@@ -2184,8 +2186,7 @@ func (m diffViewModel) displayLinesFor(idx int) int {
 	return strings.Count(rendered, "\n") + 1
 }
 
-// handleMouseClick positions the cursor at the clicked screen line and starts
-// drag tracking for visual selection.
+// handleMouseClick positions the cursor at the clicked screen line.
 func (m *diffViewModel) handleMouseClick(relY int) {
 	idx := m.screenLineToIndex(relY)
 	if idx < 0 {
@@ -2193,9 +2194,6 @@ func (m *diffViewModel) handleMouseClick(relY int) {
 	}
 	idx = m.nearestSelectable(idx, 1)
 	m.cursor = idx
-	m.visualMode = true
-	m.visualStart = m.cursor
-	m.mouseDragActive = true
 	m.ensureVisible()
 }
 
@@ -2355,6 +2353,9 @@ func formatInlineComment(c *types.ReviewComment) string {
 		body = "(suggested edit)"
 	} else if len(body) > 60 {
 		body = body[:57] + "..."
+	}
+	if len(c.Replies) > 0 {
+		body = fmt.Sprintf("%s  (%d replies)", body, len(c.Replies))
 	}
 	return fmt.Sprintf("  ┌─── %s %s", typeLabel, strings.Repeat("─", 20)) + "\n" +
 		fmt.Sprintf("  %s %s", prefix, body) + "\n" +
@@ -2519,6 +2520,35 @@ func formatExpandedComment(c *types.ReviewComment, width int, originalCode strin
 			wrapped := wrapContent(paragraph, bodyWidth)
 			for _, w := range wrapped {
 				lines = append(lines, fmt.Sprintf("  %s %s", prefix, w))
+			}
+		}
+	}
+
+	if len(c.Replies) > 0 {
+		lines = append(lines, fmt.Sprintf("  %s", prefix))
+		lines = append(lines, fmt.Sprintf("  %s Thread replies:", prefix))
+		for _, reply := range c.Replies {
+			author := reply.Author
+			if author == "" {
+				author = "agent"
+			}
+			label := fmt.Sprintf("%s:", author)
+			for _, paragraph := range strings.Split(reply.Body, "\n") {
+				if paragraph == "" {
+					lines = append(lines, fmt.Sprintf("  %s", prefix))
+					continue
+				}
+				wrapped := wrapContent(paragraph, bodyWidth-ansi.StringWidth(label)-1)
+				if len(wrapped) == 0 {
+					wrapped = []string{""}
+				}
+				for i, w := range wrapped {
+					if i == 0 {
+						lines = append(lines, fmt.Sprintf("  %s %s %s", prefix, label, w))
+					} else {
+						lines = append(lines, fmt.Sprintf("  %s %s", prefix, w))
+					}
+				}
 			}
 		}
 	}

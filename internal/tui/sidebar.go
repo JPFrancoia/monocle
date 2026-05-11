@@ -33,7 +33,17 @@ type sidebarModel struct {
 
 	// reviewTracking: when false, hide all review indicators/counts/filters
 	reviewTracking bool
+
+	threadMarkers map[string]threadMarkerState
 }
+
+type threadMarkerState int
+
+const (
+	threadMarkerNone threadMarkerState = iota
+	threadMarkerResolved
+	threadMarkerOpen
+)
 
 func newSidebarModel(keys *KeyMap) sidebarModel {
 	return sidebarModel{
@@ -41,6 +51,43 @@ func newSidebarModel(keys *KeyMap) sidebarModel {
 		collapsed:   make(map[string]bool),
 		keys:        keys,
 	}
+}
+
+func threadMarkerKey(targetType types.TargetType, targetRef string) string {
+	return string(targetType) + "\x00" + targetRef
+}
+
+func (m sidebarModel) threadMarker(targetType types.TargetType, targetRef string, selected bool) string {
+	if m.threadMarkers == nil {
+		return ""
+	}
+	switch m.threadMarkers[threadMarkerKey(targetType, targetRef)] {
+	case threadMarkerOpen:
+		if selected && m.focused {
+			return "•"
+		}
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("3")).Render("•")
+	case threadMarkerResolved:
+		if selected && m.focused {
+			return "·"
+		}
+		return lipgloss.NewStyle().Foreground(lipgloss.Color("8")).Faint(true).Render("·")
+	default:
+		return ""
+	}
+}
+
+func sidebarRight(parts ...string) string {
+	var visible []string
+	for _, part := range parts {
+		if part != "" {
+			visible = append(visible, part)
+		}
+	}
+	if len(visible) == 0 {
+		return " "
+	}
+	return " " + strings.Join(visible, "") + " "
 }
 
 type sidebarSelectMsg struct {
@@ -362,14 +409,15 @@ func (m sidebarModel) renderFileItem(f types.ChangedFile, selected bool) string 
 	const iconSlack = 2
 
 	if selected && m.focused {
-		right := " "
+		threadChar := m.threadMarker(types.TargetFile, f.Path, true)
+		plainReview := ""
 		if m.reviewTracking {
-			plainReview := "○"
+			plainReview = "○"
 			if f.Reviewed {
 				plainReview = "✓"
 			}
-			right = " " + plainReview + " "
 		}
+		right := sidebarRight(threadChar, plainReview)
 		prefix := fmt.Sprintf(" %s %s%s ", statusChar, recentChar, glyph)
 		nameW := m.width - lipgloss.Width(prefix) - lipgloss.Width(right) - iconSlack
 		if nameW < 1 {
@@ -385,10 +433,12 @@ func (m sidebarModel) renderFileItem(f types.ChangedFile, selected bool) string 
 		leftPad = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Render("▎")
 	}
 
-	right := " "
+	threadChar := m.threadMarker(types.TargetFile, f.Path, selected)
+	reviewPart := ""
 	if m.reviewTracking {
-		right = " " + reviewChar + " "
+		reviewPart = reviewChar
 	}
+	right := sidebarRight(threadChar, reviewPart)
 	prefix := fmt.Sprintf("%s%s %s%s ", leftPad, styledStatus, recentChar, icon)
 	nameW := m.width - lipgloss.Width(prefix) - lipgloss.Width(right) - iconSlack
 	if nameW < 1 {
@@ -484,14 +534,15 @@ func (m sidebarModel) renderTreeFileItem(item visibleItem, selected bool) string
 	const iconSlack = 2
 
 	if selected && m.focused {
-		right := " "
+		threadChar := m.threadMarker(types.TargetFile, f.Path, true)
+		plainReview := ""
 		if m.reviewTracking {
-			plainReview := "○"
+			plainReview = "○"
 			if f.Reviewed {
 				plainReview = "✓"
 			}
-			right = " " + plainReview + " "
 		}
+		right := sidebarRight(threadChar, plainReview)
 		prefix := fmt.Sprintf(" %s%s %s%s ", indent, statusChar, recentChar, glyph)
 		nameW := m.width - lipgloss.Width(prefix) - lipgloss.Width(right) - iconSlack
 		if nameW < 1 {
@@ -508,10 +559,12 @@ func (m sidebarModel) renderTreeFileItem(item visibleItem, selected bool) string
 	}
 
 	styledStatus := lipgloss.NewStyle().Foreground(lipgloss.Color(statusColor)).Bold(true).Render(statusChar)
-	right := " "
+	threadChar := m.threadMarker(types.TargetFile, f.Path, selected)
+	reviewPart := ""
 	if m.reviewTracking {
-		right = " " + reviewChar + " "
+		reviewPart = reviewChar
 	}
+	right := sidebarRight(threadChar, reviewPart)
 	prefix := fmt.Sprintf("%s%s%s %s%s ", leftPad, indent, styledStatus, recentChar, icon)
 	nameW := m.width - lipgloss.Width(prefix) - lipgloss.Width(right) - iconSlack
 	if nameW < 1 {
@@ -544,14 +597,15 @@ func (m sidebarModel) renderContentItem(item types.ContentItem, selected bool) s
 	const iconSlack = 2
 
 	if selected && m.focused {
-		right := " "
+		threadChar := m.threadMarker(types.TargetContent, item.ID, true)
+		plainReview := ""
 		if m.reviewTracking {
-			plainReview := "○"
+			plainReview = "○"
 			if item.Reviewed {
 				plainReview = "✓"
 			}
-			right = " " + plainReview + " "
 		}
+		right := sidebarRight(threadChar, plainReview)
 		prefix := fmt.Sprintf("  %s ", glyph)
 		nameW := m.width - lipgloss.Width(prefix) - lipgloss.Width(right) - iconSlack
 		if nameW < 1 {
@@ -566,10 +620,12 @@ func (m sidebarModel) renderContentItem(item types.ContentItem, selected bool) s
 	if selected {
 		leftPad = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Render("▎")
 	}
-	right := " "
+	threadChar := m.threadMarker(types.TargetContent, item.ID, selected)
+	reviewPart := ""
 	if m.reviewTracking {
-		right = " " + reviewChar + " "
+		reviewPart = reviewChar
 	}
+	right := sidebarRight(threadChar, reviewPart)
 	prefix := fmt.Sprintf("%s %s ", leftPad, icon)
 	nameW := m.width - lipgloss.Width(prefix) - lipgloss.Width(right) - iconSlack
 	if nameW < 1 {
@@ -593,14 +649,15 @@ func (m sidebarModel) renderAdditionalFileItem(af types.AdditionalFile, selected
 	const iconSlack = 2
 
 	if selected && m.focused {
-		right := " "
+		threadChar := m.threadMarker(types.TargetAdditionalFile, af.Path, true)
+		plainReview := ""
 		if m.reviewTracking {
-			plainReview := "○"
+			plainReview = "○"
 			if af.Reviewed {
 				plainReview = "✓"
 			}
-			right = " " + plainReview + " "
 		}
+		right := sidebarRight(threadChar, plainReview)
 		prefix := fmt.Sprintf("  %s ", glyph)
 		nameW := m.width - lipgloss.Width(prefix) - lipgloss.Width(right) - iconSlack
 		if nameW < 1 {
@@ -616,10 +673,12 @@ func (m sidebarModel) renderAdditionalFileItem(af types.AdditionalFile, selected
 		leftPad = lipgloss.NewStyle().Foreground(lipgloss.Color("12")).Render("▎")
 	}
 
-	right := " "
+	threadChar := m.threadMarker(types.TargetAdditionalFile, af.Path, selected)
+	reviewPart := ""
 	if m.reviewTracking {
-		right = " " + reviewChar + " "
+		reviewPart = reviewChar
 	}
+	right := sidebarRight(threadChar, reviewPart)
 	prefix := fmt.Sprintf("%s %s ", leftPad, icon)
 	nameW := m.width - lipgloss.Width(prefix) - lipgloss.Width(right) - iconSlack
 	if nameW < 1 {

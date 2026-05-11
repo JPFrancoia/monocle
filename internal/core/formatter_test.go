@@ -112,6 +112,37 @@ func TestFormatMixedTypes(t *testing.T) {
 	}
 }
 
+func TestFormatQuestionWithThreadReply(t *testing.T) {
+	f := NewReviewFormatter(nil, defaultFormatCfg())
+	comments := []types.ReviewComment{
+		{
+			ID:         "thread-1",
+			TargetType: types.TargetFile,
+			TargetRef:  "main.go",
+			LineStart:  12,
+			Type:       types.CommentQuestion,
+			Body:       "Why not reuse the existing helper?",
+			Replies: []types.CommentReply{
+				{ID: "reply-1", CommentID: "thread-1", Author: "agent", Body: "I reused it in the follow-up change."},
+			},
+		},
+	}
+
+	result := f.Format(&types.ReviewSession{}, comments, types.ActionRequestChanges, "")
+
+	if !strings.Contains(result.Formatted, "[QUESTION]") {
+		t.Error("missing QUESTION header")
+	}
+	if !strings.Contains(result.Formatted, "Thread ID: `thread-1`") {
+		t.Error("missing thread ID")
+	}
+	if !strings.Contains(result.Formatted, "agent: I reused it") {
+		t.Error("missing thread reply")
+	}
+	if !strings.Contains(result.Formatted, "1 question(s) to answer") {
+		t.Error("missing question summary")
+	}
+}
 
 func TestFormatContentItemWithProvider(t *testing.T) {
 	f := NewReviewFormatter(nil, defaultFormatCfg())

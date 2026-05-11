@@ -546,7 +546,8 @@ type SetAutoAdvanceRefMsg struct {
 }
 
 type SetAutoAdvanceRefResponse struct {
-	Type string `json:"type"`
+	Type  string `json:"type"`
+	Error string `json:"error,omitempty"`
 }
 
 type IsAutoAdvanceRefMsg struct {
@@ -605,7 +606,8 @@ type ClearSnapshotBaseMsg struct {
 }
 
 type ClearSnapshotBaseResponse struct {
-	Type string `json:"type"`
+	Type  string `json:"type"`
+	Error string `json:"error,omitempty"`
 }
 
 type GetActiveSnapshotMsg struct {

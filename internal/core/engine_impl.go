@@ -506,6 +506,28 @@ func (e *Engine) handleAddAdditionalFiles(msg *protocol.AddAdditionalFilesMsg) *
 	}
 }
 
+func (e *Engine) handleReplyToThread(msg *protocol.ReplyToThreadMsg) *protocol.ReplyToThreadResponse {
+	author := msg.Author
+	if author == "" {
+		author = "agent"
+	}
+	reply, err := e.AddCommentReply(msg.CommentID, author, msg.Body)
+	if err != nil {
+		return &protocol.ReplyToThreadResponse{
+			Type:    protocol.TypeReplyToThreadResponse,
+			Success: false,
+			Message: err.Error(),
+		}
+	}
+
+	return &protocol.ReplyToThreadResponse{
+		Type:    protocol.TypeReplyToThreadResponse,
+		Success: true,
+		Message: fmt.Sprintf("Reply added to thread %s", reply.CommentID),
+		Reply:   reply,
+	}
+}
+
 // -- Commenting --
 
 func (e *Engine) AddComment(target CommentTarget, commentType types.CommentType, body string) (*types.ReviewComment, error) {
@@ -570,6 +592,64 @@ func (e *Engine) EditComment(commentID string, commentType types.CommentType, bo
 
 	result := *found
 	return &result, nil
+}
+
+func (e *Engine) AddCommentReply(commentID, author, body string) (*types.CommentReply, error) {
+	if strings.TrimSpace(body) == "" {
+		return nil, fmt.Errorf("reply body is required")
+	}
+	if strings.TrimSpace(author) == "" {
+		author = "agent"
+	}
+
+	e.mu.Lock()
+	if e.current == nil {
+		e.mu.Unlock()
+		return nil, fmt.Errorf("no active session")
+	}
+	session := e.current
+
+	var found *types.ReviewComment
+	for i := range session.Comments {
+		if session.Comments[i].ID == commentID {
+			found = &session.Comments[i]
+			break
+		}
+	}
+	if found == nil {
+		e.mu.Unlock()
+		return nil, fmt.Errorf("comment %q not found", commentID)
+	}
+	if found.Resolved {
+		e.mu.Unlock()
+		return nil, fmt.Errorf("comment %q is resolved", commentID)
+	}
+
+	now := time.Now()
+	reply := &types.CommentReply{
+		ID:        uuid.New().String(),
+		CommentID: commentID,
+		Author:    author,
+		Body:      body,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	path := found.TargetRef
+	if err := e.database.CreateCommentReply(session.ID, reply); err != nil {
+		e.mu.Unlock()
+		return nil, fmt.Errorf("create comment reply: %w", err)
+	}
+	found.Replies = append(found.Replies, *reply)
+	found.UpdatedAt = now
+	if err := e.database.UpdateComment(found); err != nil {
+		e.mu.Unlock()
+		return nil, fmt.Errorf("update comment timestamp: %w", err)
+	}
+	e.mu.Unlock()
+
+	e.emit(EventFileChanged, EventPayload{Kind: EventFileChanged, Path: path})
+
+	return reply, nil
 }
 
 func (e *Engine) DeleteComment(commentID string) error {
@@ -946,7 +1026,7 @@ func (e *Engine) GetReviewSummary() (*types.ReviewSummary, error) {
 	}
 
 	for _, c := range e.current.Comments {
-		if c.Resolved {
+		if c.Resolved || c.ReviewRound != e.current.ReviewRound {
 			continue
 		}
 		switch c.TargetType {
@@ -960,6 +1040,8 @@ func (e *Engine) GetReviewSummary() (*types.ReviewSummary, error) {
 		switch c.Type {
 		case types.CommentIssue:
 			summary.IssueCt++
+		case types.CommentQuestion:
+			summary.QuestionCt++
 		case types.CommentSuggestion:
 			summary.SuggestionCt++
 		case types.CommentNote:
@@ -981,22 +1063,18 @@ func (e *Engine) Submit(action types.SubmitAction, body string) (*SubmitResult, 
 		return nil, fmt.Errorf("no active session")
 	}
 
-	// Validate: request_changes must include at least one unresolved comment or body text
+	currentComments := currentRoundComments(session)
+
+	// Validate: request_changes must include at least one unresolved current-round comment or body text
 	if action == types.ActionRequestChanges {
 		hasBody := strings.TrimSpace(body) != ""
-		hasUnresolved := false
-		for _, c := range session.Comments {
-			if !c.Resolved {
-				hasUnresolved = true
-				break
-			}
-		}
+		hasUnresolved := len(currentComments) > 0
 		if !hasBody && !hasUnresolved {
 			return nil, fmt.Errorf("request_changes requires at least one comment or review body")
 		}
 	}
 
-	formatted := e.formatter.Format(session, session.Comments, action, body)
+	formatted := e.formatter.Format(session, currentComments, action, body)
 
 	// Submit always queues the full review. Event subscribers are notification
 	// channels only; delivery side effects happen when an agent retrieves feedback.
@@ -1043,52 +1121,73 @@ func (e *Engine) Submit(action types.SubmitAction, body string) (*SubmitResult, 
 
 	e.emit(EventFeedbackSubmitted, EventPayload{
 		Kind:    EventFeedbackSubmitted,
-		Message: buildFeedbackSummary(formatted.Action, session.Comments),
+		Message: buildFeedbackSummary(formatted.Action, currentComments),
 		Status:  formatted.Action,
 	})
 
 	return &SubmitResult{AgentConnected: false}, nil
 }
 
+func currentRoundComments(session *types.ReviewSession) []types.ReviewComment {
+	if session == nil {
+		return nil
+	}
+	comments := make([]types.ReviewComment, 0, len(session.Comments))
+	for _, c := range session.Comments {
+		if c.Resolved || c.ReviewRound != session.ReviewRound {
+			continue
+		}
+		comments = append(comments, c)
+	}
+	return comments
+}
+
 // buildFeedbackSummary creates a human-readable one-liner for channel notifications.
 func buildFeedbackSummary(action string, comments []types.ReviewComment) string {
-	issues, suggestions, notes, _ := countByType(comments)
+	counts := countByType(comments)
 
 	// Build counts portion (skip praise — not actionable)
 	var parts []string
-	if issues > 0 {
-		if issues == 1 {
+	if counts.issue > 0 {
+		if counts.issue == 1 {
 			parts = append(parts, "1 issue")
 		} else {
-			parts = append(parts, fmt.Sprintf("%d issues", issues))
+			parts = append(parts, fmt.Sprintf("%d issues", counts.issue))
 		}
 	}
-	if suggestions > 0 {
-		if suggestions == 1 {
+	if counts.question > 0 {
+		if counts.question == 1 {
+			parts = append(parts, "1 question")
+		} else {
+			parts = append(parts, fmt.Sprintf("%d questions", counts.question))
+		}
+	}
+	if counts.suggestion > 0 {
+		if counts.suggestion == 1 {
 			parts = append(parts, "1 suggestion")
 		} else {
-			parts = append(parts, fmt.Sprintf("%d suggestions", suggestions))
+			parts = append(parts, fmt.Sprintf("%d suggestions", counts.suggestion))
 		}
 	}
-	if notes > 0 {
-		if notes == 1 {
+	if counts.note > 0 {
+		if counts.note == 1 {
 			parts = append(parts, "1 note")
 		} else {
-			parts = append(parts, fmt.Sprintf("%d notes", notes))
+			parts = append(parts, fmt.Sprintf("%d notes", counts.note))
 		}
 	}
-	counts := strings.Join(parts, ", ")
+	countText := strings.Join(parts, ", ")
 
 	if action == string(types.ActionRequestChanges) {
-		if counts != "" {
-			return fmt.Sprintf("Your reviewer requested changes (%s). Call get_feedback to retrieve the full review and address their comments.", counts)
+		if countText != "" {
+			return fmt.Sprintf("Your reviewer requested changes (%s). Call get_feedback to retrieve the full review and address their comments.", countText)
 		}
 		return "Your reviewer requested changes. Call get_feedback to retrieve the full review and address their comments."
 	}
 
 	// Approved
-	if counts != "" {
-		return fmt.Sprintf("Your reviewer approved your changes with %s. Call get_feedback to read the review.", counts)
+	if countText != "" {
+		return fmt.Sprintf("Your reviewer approved your changes with %s. Call get_feedback to read the review.", countText)
 	}
 	return "Your reviewer approved your changes. Call get_feedback to read the review."
 }
@@ -1102,7 +1201,7 @@ func (e *Engine) FormatReview(action types.SubmitAction, body string) (string, e
 		return "", fmt.Errorf("no active session")
 	}
 
-	formatted := e.formatter.Format(session, session.Comments, action, body)
+	formatted := e.formatter.Format(session, currentRoundComments(session), action, body)
 	return formatted.Formatted, nil
 }
 
@@ -1599,7 +1698,7 @@ func (e *Engine) GetReviewStatusInfo() *ReviewStatusInfo {
 		e.mu.RLock()
 		commentCount := 0
 		if e.current != nil {
-			commentCount = len(e.current.Comments)
+			commentCount = len(currentRoundComments(e.current))
 		}
 		e.mu.RUnlock()
 
@@ -1949,8 +2048,8 @@ func (e *Engine) handleAwaitReview(msg *protocol.AwaitReviewMsg) *protocol.Await
 }
 
 // completeQueuedDelivery performs the side effects of delivering queued feedback:
-// advancing the round, marking DB submissions as delivered, clearing comments,
-// and emitting events so the TUI can update.
+// advancing the round, marking DB submissions as delivered, and emitting events
+// so the TUI can update. Threads persist until the reviewer resolves or deletes them.
 func (e *Engine) completeQueuedDelivery() {
 	e.mu.Lock()
 	session := e.current
@@ -1967,8 +2066,6 @@ func (e *Engine) completeQueuedDelivery() {
 	if session != nil {
 		_ = e.database.MarkSubmissionsDelivered(session.ID)
 	}
-
-	_ = e.ClearComments()
 
 	e.feedback.ClearStatus()
 

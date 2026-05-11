@@ -93,6 +93,7 @@ type EngineAPI interface {
 	// Commenting
 	AddComment(target CommentTarget, commentType types.CommentType, body string) (*types.ReviewComment, error)
 	EditComment(commentID string, commentType types.CommentType, body string) (*types.ReviewComment, error)
+	AddCommentReply(commentID, author, body string) (*types.CommentReply, error)
 	DeleteComment(commentID string) error
 	ResolveComment(commentID string) error
 	ClearComments() error

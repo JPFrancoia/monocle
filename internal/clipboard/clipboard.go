@@ -28,9 +28,7 @@ func Copy(text string) error {
 
 // copyOSC52 writes an OSC 52 escape sequence to the controlling terminal.
 func copyOSC52(text string) error {
-	encoded := base64.StdEncoding.EncodeToString([]byte(text))
-	// Use BEL (\x07) as terminator for better tmux compatibility.
-	sequence := fmt.Sprintf("\x1b]52;c;%s\x07", encoded)
+	sequence := osc52Sequence(text)
 
 	tty, err := openTTY()
 	if err != nil {
@@ -40,6 +38,16 @@ func copyOSC52(text string) error {
 
 	_, err = tty.WriteString(sequence)
 	return err
+}
+
+func osc52Sequence(text string) string {
+	encoded := base64.StdEncoding.EncodeToString([]byte(text))
+	// Use BEL (\x07) as terminator for better tmux compatibility.
+	sequence := fmt.Sprintf("\x1b]52;c;%s\x07", encoded)
+	if os.Getenv("TMUX") == "" && os.Getenv("STY") == "" {
+		return sequence
+	}
+	return fmt.Sprintf("\x1bPtmux;\x1b%s\x1b\\", sequence)
 }
 
 // openTTY opens the controlling terminal for writing.
@@ -58,12 +66,14 @@ func copySystem(text string) error {
 	case "darwin":
 		cmd = exec.Command("pbcopy")
 	case "linux":
-		if _, err := exec.LookPath("xclip"); err == nil {
+		if _, err := exec.LookPath("wl-copy"); err == nil {
+			cmd = exec.Command("wl-copy")
+		} else if _, err := exec.LookPath("xclip"); err == nil {
 			cmd = exec.Command("xclip", "-selection", "clipboard")
 		} else if _, err := exec.LookPath("xsel"); err == nil {
 			cmd = exec.Command("xsel", "--clipboard", "--input")
 		} else {
-			return fmt.Errorf("no clipboard tool found (install xclip or xsel)")
+			return fmt.Errorf("no clipboard tool found (install wl-copy, xclip, or xsel)")
 		}
 	case "windows":
 		cmd = exec.Command("clip.exe")

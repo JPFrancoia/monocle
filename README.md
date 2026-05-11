@@ -7,7 +7,7 @@
 
 [More screenshots →](screenshots/)
 
-Monocle is a TUI that runs alongside your AI coding agent. You review diffs in real time as the agent writes code, leave line-level comments — issues, suggestions, notes — and submit a structured review in one batch. The agent receives your feedback and starts fixing things immediately, just like a PR review but live.
+Monocle is a TUI that runs alongside your AI coding agent. You review diffs in real time as the agent writes code, leave line-level comments — issues, questions, suggestions, notes — and submit a structured review in one batch. The agent receives your feedback and starts fixing things immediately, just like a PR review but live.
 
 Monocle connects to your agent via MCP tools or CLI commands over a Unix socket. With [Claude Code](https://claude.com/claude-code) and [MCP channels](https://code.claude.com/docs/en/channels-reference), it pushes feedback directly into the agent's context the moment you submit. Other agents — [OpenCode](https://opencode.ai), [Codex CLI](https://github.com/openai/codex), [Gemini CLI](https://github.com/google/gemini-cli) — retrieve feedback on demand. MCP channels just make the process smoother.
 
@@ -46,7 +46,7 @@ This configures MCP tools or skills depending on the agent. Claude Code gets an 
 
 If your agent isn't natively supported, you can set up Monocle manually:
 
-- **MCP tools**: If your agent supports MCP servers via stdio, point it at `monocle serve-mcp`. This exposes review tools (`review_status`, `get_feedback`, `send_artifact`, `add_files`) over stdio.
+- **MCP tools**: If your agent supports MCP servers via stdio, point it at `monocle serve-mcp`. This exposes review tools (`review_status`, `get_feedback`, `send_artifact`, `add_files`, `reply_to_thread`) over stdio.
 - **Skills**: Copy the local `skills/` directory into wherever your agent expects skill files.
 
 ### 2. Start reviewing
@@ -67,11 +67,13 @@ Claude Code supports [MCP channels](https://code.claude.com/docs/en/channels-ref
 
 ### The review loop
 
-Navigate with `j`/`k`, add comments with `c`, and use `v` for visual (multi-line) selections. Press `?` to see all keybindings, or see the full [Keybindings](#keybindings) reference.
+Navigate with `j`/`k`, add comments with `c`, and use `v` for visual (multi-line) comment selections. Mouse drag selects rendered text and copies it on release. Press `?` to see all keybindings, or see the full [Keybindings](#keybindings) reference.
 
-**Submit** (`S`): Your review is formatted and queued for delivery. With Claude Code channels, a push notification prompts the agent to retrieve it immediately. With other agents, the review waits in the queue until the agent runs `/get-feedback` or calls `monocle review get-feedback`. Multiple reviews can accumulate in the queue — the agent receives them all combined when it pulls. If there are no comments, the review is treated as an approval. Toggle the "Copy to clipboard" checkbox with `Shift+Tab` in the submit modal to also copy the formatted review when submitting.
+**Submit** (`S`): Your review is formatted and queued for delivery. With Claude Code channels, a push notification prompts the agent to retrieve it immediately. With other agents, the review waits in the queue until the agent runs `/get-feedback` or calls `monocle review get-feedback`. Each comment includes a thread ID, and the agent can reply in that open thread with `monocle review reply` or the `reply_to_thread` MCP tool. Multiple reviews can accumulate in the queue — the agent receives them all combined when it pulls. If there are no comments, the review is treated as an approval. Toggle the "Copy to clipboard" checkbox with `Shift+Tab` in the submit modal to also copy the formatted review when submitting.
 
 **External editor** (`Ctrl+g`): In the comment or submit modal, opens the current text in your `$VISUAL` or `$EDITOR` (falls back to `vi`). Edit in your preferred editor, save and quit, and the text is brought back into the modal.
+
+**Paste**: Terminal paste inserts text in the comment editor, submit modal, and command mode.
 
 **Yank** (`Ctrl+y`): In the submit modal, copies the formatted review to your system clipboard without submitting, then closes the modal.
 
@@ -97,7 +99,8 @@ This means you can review the agent's *thinking* before it writes code — not j
 - **Pause flow** — Ask your agent to stop and wait while you review, then release it when ready (requires MCP channel support)
 - **Live diff viewer** — Unified and split (side-by-side) views with syntax highlighting and intra-line diffs
 - **Review context** — The title bar shows the active repository, branch, and selected file path so you can confirm what you are reviewing
-- **Structured comments** — Tag feedback as issues, suggestions, notes, or praise with line-level or file-level precision
+- **Structured comments** — Tag feedback as issues, questions, suggestions, or notes with line-level or file-level precision
+- **Persistent comment threads** — Agent replies appear under the original comment, and threads stay visible until you resolve or delete them
 - **Suggested edits** — Press `s` to propose exact code changes with GitHub-style `suggestion` blocks
 - **Visual selection** — Select line ranges for comments with vim-style visual mode
 - **Markdown rendering** — Plans and changed `.md` files render with styled headings, bold, italic, lists, and code blocks
@@ -105,10 +108,10 @@ This means you can review the agent's *thinking* before it writes code — not j
 - **Responsive layout** — Automatically stacks panes vertically in narrow terminals
 - **Ref picker** — Change the base ref on the fly to compare against any branch or commit
 - **Version history** — Browse all versions of a plan or artifact and diff any version against the latest
-- **Comment resolution** — Mark individual comments as resolved (`x`); resolved comments are excluded from submitted reviews
+- **Comment resolution** — Mark individual comments as resolved (`x`); only the reviewer can resolve threads, and resolved comments are excluded from submitted reviews
 - **Submission history** — View past review submissions with `:history`
-- **Mouse support** — Click to focus panes, scroll with the wheel, click files to select, drag to make visual selections, and interact with modal controls
-- **External editor** — Open comment or submit text in `$VISUAL`/`$EDITOR` with `Ctrl+g` for full editing power
+- **Mouse support** — Click to focus panes, scroll with the wheel, click files to select, drag to select/copy rendered text, and interact with modal controls
+- **Paste and external editor support** — Paste directly into comment, submit, and command fields, or open comment/submit text in `$VISUAL`/`$EDITOR` with `Ctrl+g`
 - **Configurable keybindings** — Override any navigation or action key via config
 - **Feedback queue** — Submit reviews while the agent is working; delivered when the agent next runs `/get-feedback`
 - **Connection indicator** — See at a glance whether your agent is connected, with manual socket override for troubleshooting
@@ -126,6 +129,7 @@ Monocle exposes review operations via **MCP tools** (default for Claude Code) or
 | Send artifact (blocking) | `send_artifact` with `wait: true` | `/review-plan-wait` | Submit content and iterate on feedback until approved |
 | Check status | `review_status` | — | Check if feedback is pending or a pause was requested |
 | Add files | `add_files` | — | Add files to the current review session |
+| Reply to thread | `reply_to_thread` | — | Answer a reviewer thread without resolving it |
 
 ## Keybindings
 
@@ -228,6 +232,8 @@ monocle review get-feedback [--wait] [--json]            Retrieve review feedbac
 monocle review send-artifact --title T [--file F] [--id ID] [--type EXT] [--wait] [--json]
                                                          Send content for review
 monocle review add-files <paths...> [--json]             Add files to review session
+monocle review reply --comment-id ID [--body TEXT] [--json]
+                                                         Reply to a review thread
 ```
 
 - `--wait` blocks until the reviewer responds (used by `/review-plan-wait`)
@@ -295,7 +301,7 @@ Monocle loads settings from JSON config files:
 | `context_lines`                      | integer                                    | `3`          | Unchanged lines shown around diff hunks                                  |
 | `ignore_patterns`                    | string array                               | `[]`         | Glob patterns for files to exclude                                       |
 | `min_diff_width`                     | integer                                    | `80`         | Minimum character width for the diff viewer in side-by-side layout       |
-| `mouse`                              | `true`, `false`                            | `true`       | Enable mouse interactions (click, scroll, drag)                          |
+| `mouse`                              | `true`, `false`                            | `true`       | Enable mouse interactions (click, scroll, text-selection drag)           |
 | `auto_focus_mode`                    | `true`, `false`                            | `false`      | Auto-enter focus mode (hide sidebar, enable wrap) when reviewing plans   |
 | `comment_expand`                     | `true`, `false`                            | `true`       | Auto-expand comments on hover                                            |
 | `comment_expand_delay`               | integer (ms)                               | `2000`       | Delay before auto-expanding a selected comment (0 = instant)             |
@@ -361,10 +367,10 @@ You can also invoke `/review-plan` and `/review-plan-wait` manually at any time.
 └─────────────┘                └───────────────┘              └──────────┘
 ```
 
-1. You leave line-level comments on diffs — issues, suggestions, notes, praise
+1. You leave line-level comments on diffs — issues, questions, suggestions, notes
 2. You press `S` to submit your review
 3. Monocle queues the review for delivery
-4. The agent picks up the feedback — automatically via push notification (Claude Code with channels) or when you trigger `/get-feedback` — and starts addressing your comments
+4. The agent picks up the feedback — automatically via push notification (Claude Code with channels) or when you trigger `/get-feedback` — and starts addressing your comments, replying in each thread when needed
 5. You see the updated diffs in real time, review again, and iterate
 
 Feedback is always queued for reliability. How the agent learns about it depends on the integration:

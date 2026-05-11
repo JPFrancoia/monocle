@@ -5,7 +5,7 @@ description: "CLI commands for agents to interact with a running monocle session
 
 These commands are used by agents — via installed skills, MCP tools, or directly from the command line — to communicate with a running monocle session.
 
-When registered in **MCP tools mode**, agents call these operations as MCP tools (`review_status`, `get_feedback`, `send_artifact`, `add_files`) instead of CLI commands. The behavior is identical — the MCP server connects to the same Unix socket internally.
+When registered in **MCP tools mode**, agents call these operations as MCP tools (`review_status`, `get_feedback`, `send_artifact`, `add_files`, `reply_to_thread`) instead of CLI commands. The behavior is identical — the MCP server connects to the same Unix socket internally.
 
 When registered in **skills mode**, agents invoke the corresponding CLI commands below.
 
@@ -51,6 +51,8 @@ monocle review get-feedback [--wait] [--json] [--workdir PATH] [--socket PATH]
 
 When the reviewer submits a review, it is placed in a queue. Multiple queued reviews are combined and delivered together as a single response.
 
+Each submitted comment includes a `Thread ID`. Use `monocle review reply --comment-id <thread-id>` or the `reply_to_thread` MCP tool to answer questions or explain what changed in that same open thread. Agents cannot resolve threads; only the reviewer can resolve them in the TUI.
+
 Without `--wait`, the command returns immediately. If no feedback is pending it prints `No feedback pending.` and exits.
 
 ### Flags
@@ -69,6 +71,48 @@ In MCP tools mode, call the `get_feedback` tool:
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `wait` | boolean | No | When `true`, blocks until feedback is available. |
+
+---
+
+## `monocle review reply`
+
+Reply to an unresolved reviewer comment thread.
+
+```bash
+monocle review reply --comment-id ID [--body TEXT] [--json] [--workdir PATH] [--socket PATH]
+```
+
+When `--body` is omitted, the command reads the reply body from stdin. Use the `Thread ID` shown in feedback as the `--comment-id` value.
+
+### Flags
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--comment-id ID` | | **(Required)** Thread/comment ID from the submitted feedback. |
+| `--body TEXT` | | Reply body. If omitted, reads stdin. |
+| `--json` | | Output the result as structured JSON. |
+| `--workdir PATH` | `-C` | Override the working directory. Also reads from `MONOCLE_WORKDIR`. |
+| `--socket PATH` | | Override the Unix socket path. Also reads from `MONOCLE_SOCKET`. |
+
+### Examples
+
+```bash
+monocle review reply --comment-id 018f... --body "Fixed by reusing the existing validator."
+```
+
+```bash
+printf '%s\n' "I left this unchanged because the generated file is intentionally checked in." \
+  | monocle review reply --comment-id 018f...
+```
+
+### MCP tool equivalent
+
+In MCP tools mode, call the `reply_to_thread` tool:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `comment_id` | string | Yes | Thread/comment ID from the submitted feedback. |
+| `body` | string | Yes | Reply text to append to the thread. |
 
 ---
 

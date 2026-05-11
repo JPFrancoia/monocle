@@ -102,6 +102,98 @@ func TestSocketServer_OneShot(t *testing.T) {
 	}
 }
 
+func TestSocketServerReviewerOnlyMutationsRequireFrontendRole(t *testing.T) {
+	engine, _ := setupTestEngine(t)
+	server := engine.server
+
+	tests := []struct {
+		name string
+		msg  any
+	}{
+		{"resolve comment", &protocol.ResolveCommentMsg{Type: protocol.TypeResolveComment, CommentID: "c1"}},
+		{"clear comments", &protocol.ClearCommentsMsg{Type: protocol.TypeClearComments}},
+		{"clear review", &protocol.ClearReviewMsg{Type: protocol.TypeClearReview}},
+		{"mark reviewed", &protocol.MarkReviewedMsg{Type: protocol.TypeMarkReviewed, Path: "test.go"}},
+		{"unmark reviewed", &protocol.UnmarkReviewedMsg{Type: protocol.TypeUnmarkReviewed, Path: "test.go"}},
+		{"submit", &protocol.SubmitMsg{Type: protocol.TypeSubmit, Action: types.ActionApprove}},
+		{"set base ref", &protocol.SetBaseRefMsg{Type: protocol.TypeSetBaseRef, Ref: "main"}},
+		{"set auto advance ref", &protocol.SetAutoAdvanceRefMsg{Type: protocol.TypeSetAutoAdvanceRef, Enabled: true}},
+		{"set snapshot base", &protocol.SetSnapshotBaseMsg{Type: protocol.TypeSetSnapshotBase, SnapshotID: 1}},
+		{"clear snapshot base", &protocol.ClearSnapshotBaseMsg{Type: protocol.TypeClearSnapshotBase}},
+		{"save config", &protocol.SaveConfigMsg{Type: protocol.TypeSaveConfig}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := server.handleMessage(tt.msg, socketRoleAgent)
+			if errText := responseError(resp); errText == "" {
+				t.Fatalf("expected reviewer-only error for %T", tt.msg)
+			}
+		})
+	}
+}
+
+func responseError(resp any) string {
+	switch r := resp.(type) {
+	case *protocol.ResolveCommentResponse:
+		return r.Error
+	case *protocol.ClearCommentsResponse:
+		return r.Error
+	case *protocol.ClearReviewResponse:
+		return r.Error
+	case *protocol.MarkReviewedResponse:
+		return r.Error
+	case *protocol.UnmarkReviewedResponse:
+		return r.Error
+	case *protocol.SubmitResponse:
+		return r.Error
+	case *protocol.SetBaseRefResponse:
+		return r.Error
+	case *protocol.SetAutoAdvanceRefResponse:
+		return r.Error
+	case *protocol.SetSnapshotBaseResponse:
+		return r.Error
+	case *protocol.ClearSnapshotBaseResponse:
+		return r.Error
+	case *protocol.SaveConfigResponse:
+		return r.Error
+	default:
+		return ""
+	}
+}
+
+func TestSocketServerAgentCanReplyToThread(t *testing.T) {
+	engine, _ := setupTestEngine(t)
+	server := engine.server
+
+	comment, err := engine.AddComment(CommentTarget{
+		TargetType: types.TargetFile,
+		TargetRef:  "test.go",
+		LineStart:  1,
+		LineEnd:    1,
+	}, types.CommentQuestion, "What about this?")
+	if err != nil {
+		t.Fatalf("add comment: %v", err)
+	}
+
+	resp := server.handleMessage(&protocol.ReplyToThreadMsg{
+		Type:      protocol.TypeReplyToThread,
+		CommentID: comment.ID,
+		Author:    "agent",
+		Body:      "Answered in code.",
+	}, socketRoleAgent)
+	replyResp, ok := resp.(*protocol.ReplyToThreadResponse)
+	if !ok {
+		t.Fatalf("expected ReplyToThreadResponse, got %T", resp)
+	}
+	if !replyResp.Success {
+		t.Fatalf("reply success = false, message = %q", replyResp.Message)
+	}
+	if replyResp.Reply == nil || replyResp.Reply.CommentID != comment.ID {
+		t.Fatalf("reply = %#v, want comment ID %q", replyResp.Reply, comment.ID)
+	}
+}
+
 func TestSocketServer_Subscription(t *testing.T) {
 	engine, socketPath := setupTestEngine(t)
 
