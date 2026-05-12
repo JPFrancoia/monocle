@@ -137,8 +137,8 @@ Monocle exposes review operations via **MCP tools** (default for Claude Code) or
 |------------------------|-----------------------------------------------------------|
 | `j`/`k`                | Move up/down                                              |
 | `J`/`K`                | Scroll diff up/down (any pane)                            |
-| `Ctrl+d`/`u`           | Scroll diff half page (any pane)                          |
-| `g`/`G`                | Top/bottom                                                |
+| `Ctrl+d`/`Ctrl+u`, `PageDown`/`PageUp` | Scroll diff half page (any pane)          |
+| `g`/`G`, `Home`/`End`  | Top/bottom                                                |
 | `h`/`l`                | Scroll diff left/right                                    |
 | `H`/`L`                | Scroll diff left/right (any pane)                         |
 | `0`                    | Scroll to column 0 (any pane)                             |

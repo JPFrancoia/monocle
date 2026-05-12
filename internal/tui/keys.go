@@ -1,5 +1,7 @@
 package tui
 
+import "strings"
+
 // KeyMap defines all configurable keybindings. Each field holds one or more
 // key strings that trigger that action. Users override individual actions
 // via Config.Keybindings (map action name → key string).
@@ -72,10 +74,10 @@ func DefaultKeyMap() KeyMap {
 	return KeyMap{
 		Up:       []string{"k", "up"},
 		Down:     []string{"j", "down"},
-		Top:      []string{"g"},
-		Bottom:   []string{"G"},
-		HalfUp:   []string{"ctrl+u"},
-		HalfDown: []string{"ctrl+d"},
+		Top:      []string{"g", "home"},
+		Bottom:   []string{"G", "end"},
+		HalfUp:   []string{"ctrl+u", "pgup"},
+		HalfDown: []string{"ctrl+d", "pgdown"},
 		PrevFile: []string{"["},
 		NextFile: []string{"]"},
 		Select:   []string{"enter"},
@@ -256,20 +258,34 @@ func Matches(key string, bindings []string) bool {
 	return false
 }
 
-// Label returns the display label for a keybinding (first key, or joined with /).
+// Label returns the display label for keybindings joined with /.
 func Label(bindings []string) string {
-	if len(bindings) == 0 {
-		return ""
+	labels := make([]string, 0, len(bindings))
+	seen := make(map[string]bool, len(bindings))
+	for _, binding := range bindings {
+		label := labelKey(binding)
+		if seen[label] {
+			continue
+		}
+		seen[label] = true
+		labels = append(labels, label)
 	}
-	if len(bindings) == 1 {
-		return labelKey(bindings[0])
-	}
-	return labelKey(bindings[0]) + "/" + labelKey(bindings[1])
+	return strings.Join(labels, "/")
 }
 
 func labelKey(binding string) string {
 	if isSpaceKey(binding) {
 		return "Space"
+	}
+	switch binding {
+	case "home":
+		return "Home"
+	case "end":
+		return "End"
+	case "pgup":
+		return "PageUp"
+	case "pgdown":
+		return "PageDown"
 	}
 	return binding
 }
