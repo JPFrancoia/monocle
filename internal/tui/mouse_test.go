@@ -772,6 +772,28 @@ func TestBuildThreadMarkersOpenAndResolved(t *testing.T) {
 	}
 }
 
+func TestBuildThreadMarkersIgnoresPriorRounds(t *testing.T) {
+	session := &types.ReviewSession{
+		ReviewRound: 2,
+		Comments: []types.ReviewComment{
+			{ID: "old", TargetType: types.TargetFile, TargetRef: "old.go", Type: types.CommentIssue, ReviewRound: 1},
+			{ID: "open", TargetType: types.TargetFile, TargetRef: "open.go", Type: types.CommentIssue, ReviewRound: 2},
+			{ID: "done", TargetType: types.TargetFile, TargetRef: "done.go", Type: types.CommentNote, Resolved: true, ReviewRound: 2},
+		},
+	}
+
+	markers := buildThreadMarkers(session)
+	if _, ok := markers[threadMarkerKey(types.TargetFile, "old.go")]; ok {
+		t.Fatal("expected prior-round comment to be hidden from thread markers")
+	}
+	if markers[threadMarkerKey(types.TargetFile, "open.go")] != threadMarkerOpen {
+		t.Fatal("expected current open marker")
+	}
+	if markers[threadMarkerKey(types.TargetFile, "done.go")] != threadMarkerResolved {
+		t.Fatal("expected current resolved marker")
+	}
+}
+
 func TestCommentEditorClickTypeLabel(t *testing.T) {
 	m := &commentEditorModel{
 		active:      true,

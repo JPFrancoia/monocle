@@ -31,6 +31,9 @@ func (s *stubEngine) GetQueuedCount() int                  { return 0 }
 func (s *stubEngine) ReloadPendingFeedback()               {}
 func (s *stubEngine) SelectedBaseRef() string              { return "" }
 func (s *stubEngine) GetChangedFiles() []types.ChangedFile { return s.changedFiles }
+func (s *stubEngine) GetFileDiff(path string) (*types.DiffResult, error) {
+	return &types.DiffResult{Path: path}, nil
+}
 func (s *stubEngine) RefreshChangedFiles() ([]types.ChangedFile, error) {
 	s.refreshCalled = true
 	if s.refreshErr != nil {
@@ -140,6 +143,32 @@ func TestLoadInitialItemsFallsBackToCachedFilesOnRefreshError(t *testing.T) {
 	}
 	if len(load.files) != 1 || load.files[0].Path != "cached.go" {
 		t.Fatalf("expected cached file list, got %#v", load.files)
+	}
+}
+
+func TestHandleSidebarSelectFiltersPriorRoundFileComments(t *testing.T) {
+	session := &types.ReviewSession{
+		ID:          "test",
+		ReviewRound: 2,
+		Comments: []types.ReviewComment{
+			{ID: "old", TargetType: types.TargetFile, TargetRef: "main.go", Body: "old", ReviewRound: 1},
+			{ID: "current", TargetType: types.TargetFile, TargetRef: "main.go", Body: "current", ReviewRound: 2},
+			{ID: "content", TargetType: types.TargetContent, TargetRef: "main.go", Body: "content", ReviewRound: 2},
+		},
+	}
+	engine := &stubEngine{cfg: &types.Config{}, session: session}
+	m := NewApp(engine)
+
+	msg := m.handleSidebarSelect(sidebarSelectMsg{path: "main.go"})()
+	load, ok := msg.(loadDiffMsg)
+	if !ok {
+		t.Fatalf("expected loadDiffMsg, got %T", msg)
+	}
+	if len(load.comments) != 1 {
+		t.Fatalf("expected 1 current-round file comment, got %+v", load.comments)
+	}
+	if load.comments[0].ID != "current" {
+		t.Fatalf("expected current comment, got %q", load.comments[0].ID)
 	}
 }
 

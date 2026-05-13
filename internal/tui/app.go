@@ -492,6 +492,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
+			m.statusBar.commentCount = currentRoundCommentCount(session)
 		}
 		m.statusBar.fileCount = len(msg.files)
 		m.statusBar.socketStarted = m.engine.GetSocketPath() != ""
@@ -592,7 +593,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
-			m.statusBar.commentCount = len(session.Comments)
+			m.statusBar.commentCount = currentRoundCommentCount(session)
 		}
 		// Auto-advance to next unreviewed item after marking reviewed
 		if msg.advance {
@@ -898,14 +899,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return loadContentDiffMsg{contentID: contentID, err: err}
 			}
 			session := engine.GetSession()
-			var comments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == contentID && c.TargetType == types.TargetContent {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments := commentsForTarget(session, types.TargetContent, contentID)
 			return loadContentDiffMsg{contentID: contentID, result: result, comments: comments, preferredStyle: preferredStyle}
 		}
 
@@ -926,14 +920,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return loadFileContentMsg{path: path, err: err}
 			}
 			session := engine.GetSession()
-			var comments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == path {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments := commentsForTarget(session, types.TargetFile, path)
 			return loadFileContentMsg{
 				path:            path,
 				content:         content,
@@ -990,26 +977,12 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return loadAdditionalFileMsg{path: additionalPath, err: err}
 				}
 				session := engine.GetSession()
-				var comments []types.ReviewComment
-				if session != nil {
-					for _, c := range session.Comments {
-						if c.TargetRef == additionalPath && c.TargetType == types.TargetAdditionalFile {
-							comments = append(comments, c)
-						}
-					}
-				}
+				comments := commentsForTarget(session, types.TargetAdditionalFile, additionalPath)
 				return loadAdditionalFileMsg{path: additionalPath, content: content, comments: comments}
 			}
 			result, _ := engine.GetFileDiff(currentPath)
 			session := engine.GetSession()
-			var comments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == currentPath {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments := commentsForTarget(session, types.TargetFile, currentPath)
 			return loadDiffMsg{path: currentPath, result: result, comments: comments}
 		}
 
@@ -1066,27 +1039,13 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return loadAdditionalFileMsg{path: additionalPath, err: err}
 				}
 				session := engine.GetSession()
-				var comments []types.ReviewComment
-				if session != nil {
-					for _, c := range session.Comments {
-						if c.TargetRef == additionalPath && c.TargetType == types.TargetAdditionalFile {
-							comments = append(comments, c)
-						}
-					}
-				}
+				comments := commentsForTarget(session, types.TargetAdditionalFile, additionalPath)
 				return loadAdditionalFileMsg{path: additionalPath, content: content, comments: comments}
 			}
 			// Reload diff to update comment display
 			result, _ := engine.GetFileDiff(currentPath)
 			session := engine.GetSession()
-			var comments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == currentPath {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments := commentsForTarget(session, types.TargetFile, currentPath)
 			return loadDiffMsg{path: currentPath, result: result, comments: comments}
 		}
 
@@ -1161,7 +1120,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.feedbackStatus = m.engine.GetFeedbackStatus()
 		session := m.engine.GetSession()
 		if session != nil {
-			m.statusBar.commentCount = len(session.Comments)
+			m.statusBar.commentCount = currentRoundCommentCount(session)
 			m.statusBar.fileCount = len(session.ChangedFiles)
 			m.statusBar.baseRef = m.displayBaseRef(session)
 		}
@@ -1216,7 +1175,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncArtifactsAfterSubmit(session)
 
 		if session != nil {
-			m.statusBar.commentCount = len(session.Comments)
+			m.statusBar.commentCount = currentRoundCommentCount(session)
 			m.statusBar.fileCount = len(session.ChangedFiles)
 		}
 
@@ -1342,7 +1301,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
-			m.statusBar.commentCount = len(session.Comments)
+			m.statusBar.commentCount = currentRoundCommentCount(session)
 		}
 		// Reload current view to remove inline comment markers
 		if msg.reloadPath != "" && msg.isContent {
@@ -1366,7 +1325,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
-			m.statusBar.commentCount = len(session.Comments)
+			m.statusBar.commentCount = currentRoundCommentCount(session)
 		}
 		// If viewing a content item, it no longer exists — clear the view
 		if msg.isContent {
@@ -1398,7 +1357,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		recalcStackedLayout(&m)
 		session := m.engine.GetSession()
 		if session != nil {
-			m.statusBar.commentCount = len(session.Comments)
+			m.statusBar.commentCount = currentRoundCommentCount(session)
 		}
 		if m.diffView.contentMode && m.diffView.contentID == msg.id {
 			m.diffView.contentMode = false
@@ -1981,7 +1940,7 @@ func (m appModel) executeCommand(cmd string) tea.Cmd {
 	case "discard":
 		return func() tea.Msg {
 			session := engine.GetSession()
-			if session == nil || len(session.Comments) == 0 {
+			if currentRoundCommentCount(session) == 0 {
 				return nil
 			}
 			return openConfirmMsg{
@@ -2422,14 +2381,7 @@ func (m appModel) handleSidebarSelect(msg sidebarSelectMsg) tea.Cmd {
 				return loadDiffMsg{path: msg.contentID}
 			}
 			session := m.engine.GetSession()
-			var comments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == item.ID && c.TargetType == types.TargetContent {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments := commentsForTarget(session, types.TargetContent, item.ID)
 			return loadContentMsg{
 				id:             item.ID,
 				title:          item.Title,
@@ -2448,14 +2400,7 @@ func (m appModel) handleSidebarSelect(msg sidebarSelectMsg) tea.Cmd {
 				return loadAdditionalFileMsg{path: msg.path, err: err}
 			}
 			session := m.engine.GetSession()
-			var comments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == msg.path && c.TargetType == types.TargetAdditionalFile {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments := commentsForTarget(session, types.TargetAdditionalFile, msg.path)
 			return loadAdditionalFileMsg{
 				path:     msg.path,
 				content:  content,
@@ -2469,14 +2414,7 @@ func (m appModel) handleSidebarSelect(msg sidebarSelectMsg) tea.Cmd {
 			return loadDiffMsg{path: msg.path, err: err}
 		}
 		session := m.engine.GetSession()
-		var comments []types.ReviewComment
-		if session != nil {
-			for _, c := range session.Comments {
-				if c.TargetRef == msg.path {
-					comments = append(comments, c)
-				}
-			}
-		}
+		comments := commentsForTarget(session, types.TargetFile, msg.path)
 		return loadDiffMsg{
 			path:     msg.path,
 			result:   result,
@@ -2513,14 +2451,7 @@ func (m appModel) handleSaveComment(msg saveCommentMsg) tea.Cmd {
 				return loadAdditionalFileMsg{path: msg.path, err: err}
 			}
 			session := m.engine.GetSession()
-			var comments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == msg.path && c.TargetType == types.TargetAdditionalFile {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments := commentsForTarget(session, types.TargetAdditionalFile, msg.path)
 			return loadAdditionalFileMsg{
 				path:            msg.path,
 				content:         content,
@@ -2536,14 +2467,7 @@ func (m appModel) handleSaveComment(msg saveCommentMsg) tea.Cmd {
 				return loadContentMsg{id: msg.path}
 			}
 			session := m.engine.GetSession()
-			var comments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == item.ID && c.TargetType == types.TargetContent {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments := commentsForTarget(session, types.TargetContent, item.ID)
 			return loadContentMsg{
 				id:              item.ID,
 				title:           item.Title,
@@ -2561,14 +2485,7 @@ func (m appModel) handleSaveComment(msg saveCommentMsg) tea.Cmd {
 			return loadDiffMsg{path: msg.path, err: err}
 		}
 		session := m.engine.GetSession()
-		var comments []types.ReviewComment
-		if session != nil {
-			for _, c := range session.Comments {
-				if c.TargetRef == msg.path {
-					comments = append(comments, c)
-				}
-			}
-		}
+		comments := commentsForTarget(session, types.TargetFile, msg.path)
 		return loadDiffMsg{
 			path:            msg.path,
 			result:          result,
@@ -2687,14 +2604,7 @@ func (m appModel) refreshFiles() tea.Cmd {
 		// Refresh content item if one is currently displayed
 		if isContentItem && contentID != "" {
 			item, itemErr := engine.GetContentItem(contentID)
-			var contentComments []types.ReviewComment
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == contentID && c.TargetType == types.TargetContent {
-						contentComments = append(contentComments, c)
-					}
-				}
-			}
+			contentComments := commentsForTarget(session, types.TargetContent, contentID)
 			if itemErr == nil && item != nil {
 				return refreshResultMsg{
 					files:           files,
@@ -2710,13 +2620,7 @@ func (m appModel) refreshFiles() tea.Cmd {
 		var comments []types.ReviewComment
 		if currentPath != "" && !inAdditionalFileMode {
 			result, _ = engine.GetFileDiff(currentPath)
-			if session != nil {
-				for _, c := range session.Comments {
-					if c.TargetRef == currentPath {
-						comments = append(comments, c)
-					}
-				}
-			}
+			comments = commentsForTarget(session, types.TargetFile, currentPath)
 		}
 
 		return refreshResultMsg{
@@ -2794,12 +2698,42 @@ func commentsChanged(next, prev []types.ReviewComment) bool {
 	return false
 }
 
+func commentsForTarget(session *types.ReviewSession, targetType types.TargetType, targetRef string) []types.ReviewComment {
+	if session == nil || len(session.Comments) == 0 {
+		return nil
+	}
+	comments := make([]types.ReviewComment, 0)
+	for _, c := range session.Comments {
+		if c.ReviewRound != session.ReviewRound || c.TargetType != targetType || c.TargetRef != targetRef {
+			continue
+		}
+		comments = append(comments, c)
+	}
+	return comments
+}
+
+func currentRoundCommentCount(session *types.ReviewSession) int {
+	if session == nil || len(session.Comments) == 0 {
+		return 0
+	}
+	count := 0
+	for _, c := range session.Comments {
+		if c.ReviewRound == session.ReviewRound {
+			count++
+		}
+	}
+	return count
+}
+
 func buildThreadMarkers(session *types.ReviewSession) map[string]threadMarkerState {
 	if session == nil || len(session.Comments) == 0 {
 		return nil
 	}
 	markers := make(map[string]threadMarkerState)
 	for _, c := range session.Comments {
+		if c.ReviewRound != session.ReviewRound {
+			continue
+		}
 		key := threadMarkerKey(c.TargetType, c.TargetRef)
 		if !c.Resolved {
 			markers[key] = threadMarkerOpen
@@ -2808,6 +2742,9 @@ func buildThreadMarkers(session *types.ReviewSession) map[string]threadMarkerSta
 		if markers[key] == threadMarkerNone {
 			markers[key] = threadMarkerResolved
 		}
+	}
+	if len(markers) == 0 {
+		return nil
 	}
 	return markers
 }
