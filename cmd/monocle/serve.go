@@ -23,6 +23,7 @@ import (
 type ServeCmd struct {
 	WorkDirFlag
 	Socket      string        `help:"Override socket path" env:"MONOCLE_SOCKET" default:""`
+	New         bool          `help:"Start a new session instead of resuming the latest one" name:"new" hidden:""`
 	IdleTimeout time.Duration `help:"Exit after this idle interval past the 60s grace window (disabled by default; negative disables configured idle shutdown)" name:"idle-timeout"`
 }
 
@@ -107,11 +108,11 @@ func (c *ServeCmd) Run() error {
 	// the latest session if any, otherwise start fresh. `monocle serve`
 	// has no picker UI, so `--resume` and `--session` variants stay with
 	// the `monocle` launcher.
-	if nonGitMode {
+	if c.New || nonGitMode {
 		if err := startNewSession(engine, repoRoot); err != nil {
 			return err
 		}
-	} else if err := resolveSession(engine, repoRoot, true /* continue */, false, ""); err != nil {
+	} else if err := resolveSession(engine, repoRoot, false, true /* continue */, false, ""); err != nil {
 		return err
 	}
 	engine.ReloadPendingFeedback()

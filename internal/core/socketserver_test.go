@@ -36,15 +36,16 @@ func setupTestEngine(t *testing.T) (*Engine, string) {
 	server := NewSocketServer()
 	feedback := NewFeedbackQueue()
 	engine := &Engine{
-		cfg:            cfg,
-		database:       database,
-		git:            stub,
-		server:         server,
-		feedback:       feedback,
-		sessions:       NewSessionManager(database, stub),
-		formatter:      NewReviewFormatter(func(string, int, int) string { return "" }, cfg.ReviewFormat),
-		autoAdvanceRef: true,
-		subscribers:    make(map[EventKind]map[int]EventCallback),
+		cfg:                cfg,
+		database:           database,
+		git:                stub,
+		server:             server,
+		feedback:           feedback,
+		sessions:           NewSessionManager(database, stub),
+		formatter:          NewReviewFormatter(func(string, int, int) string { return "" }, cfg.ReviewFormat),
+		defaultAutoAdvance: true,
+		autoAdvanceRef:     true,
+		subscribers:        make(map[EventKind]map[int]EventCallback),
 	}
 	server.SetEngine(engine)
 

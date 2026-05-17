@@ -95,6 +95,7 @@ type RunCmd struct {
 	WorkDirFlag
 	Socket         string   `help:"Override socket path for MCP channel connection" env:"MONOCLE_SOCKET" default:""`
 	AdditionalPath []string `help:"Additional file or directory paths to include for review (repeatable)" name:"additional-path" short:"a" type:"path"`
+	New            bool     `help:"Start a new session for this repo" name:"new" short:"n" xor:"session-mode"`
 	Continue       bool     `help:"Resume the most recent session for this repo" name:"continue" short:"c" xor:"session-mode"`
 	Resume         bool     `help:"Show a picker to resume a previous session" name:"resume" short:"r" xor:"session-mode"`
 	Session        string   `help:"Resume a specific session by ID" name:"session" short:"s" default:""`
@@ -150,7 +151,7 @@ func main() {
 }
 
 func (cmd *RunCmd) Run() error {
-	return runTUI(cmd.Socket, cmd.WorkDir, cmd.AdditionalPath, cmd.Continue, cmd.Resume, cmd.Session)
+	return runTUI(cmd.Socket, cmd.WorkDir, cmd.AdditionalPath, cmd.New, cmd.Continue, cmd.Resume, cmd.Session)
 }
 
 func (cmd *RegisterCmd) Run() error {
@@ -719,8 +720,11 @@ func startNewSession(engine core.EngineAPI, repoRoot string) error {
 	return nil
 }
 
-func resolveSession(engine core.EngineAPI, repoRoot string, continueSession bool, resumePicker bool, sessionID string) error {
+func resolveSession(engine core.EngineAPI, repoRoot string, newSession bool, continueSession bool, resumePicker bool, sessionID string) error {
 	switch {
+	case newSession:
+		return startNewSession(engine, repoRoot)
+
 	case sessionID != "":
 		// Direct session ID provided via --session
 		if _, err := engine.ResumeSession(sessionID); err != nil {
@@ -750,7 +754,7 @@ func resolveSession(engine core.EngineAPI, repoRoot string, continueSession bool
 	}
 }
 
-func runTUI(socketOverride string, workdir string, additionalPaths []string, continueSession bool, resumePicker bool, sessionID string) error {
+func runTUI(socketOverride string, workdir string, additionalPaths []string, newSession bool, continueSession bool, resumePicker bool, sessionID string) error {
 	// Resolve repo root — use --workdir if provided, otherwise CWD.
 	// nonGitMode informs the sidebar rendering but the real engine lives
 	// in `monocle serve`, which performs its own repo-root resolution.
@@ -763,8 +767,9 @@ func runTUI(socketOverride string, workdir string, additionalPaths []string, con
 	// connect as a thin client. If this TUI created the serve process, it
 	// owns that process and stops it when the TUI exits.
 	socketPath, spawned, err := adapters.EnsureServe(adapters.AutoSpawnOptions{
-		RepoRoot: repoRoot,
-		Socket:   socketOverride,
+		RepoRoot:   repoRoot,
+		Socket:     socketOverride,
+		NewSession: newSession,
 	})
 	if err != nil {
 		return fmt.Errorf("ensure serve: %w", err)
@@ -789,6 +794,12 @@ func runTUI(socketOverride string, workdir string, additionalPaths []string, con
 	// Session selection. monocle serve defaults to "continue latest or
 	// start new", so the zero-flag case needs no client-side action.
 	switch {
+	case newSession:
+		if !spawned {
+			if _, err := engine.StartSession(core.SessionOptions{RepoRoot: repoRoot}); err != nil {
+				return fmt.Errorf("start session: %w", err)
+			}
+		}
 	case sessionID != "":
 		if _, err := engine.ResumeSession(sessionID); err != nil {
 			return fmt.Errorf("resume session %s: %w", sessionID, err)

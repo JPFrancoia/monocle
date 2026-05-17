@@ -772,7 +772,7 @@ func TestBuildThreadMarkersOpenAndResolved(t *testing.T) {
 	}
 }
 
-func TestBuildThreadMarkersIgnoresPriorRounds(t *testing.T) {
+func TestBuildThreadMarkersShowsSessionComments(t *testing.T) {
 	session := &types.ReviewSession{
 		ReviewRound: 2,
 		Comments: []types.ReviewComment{
@@ -783,8 +783,8 @@ func TestBuildThreadMarkersIgnoresPriorRounds(t *testing.T) {
 	}
 
 	markers := buildThreadMarkers(session)
-	if _, ok := markers[threadMarkerKey(types.TargetFile, "old.go")]; ok {
-		t.Fatal("expected prior-round comment to be hidden from thread markers")
+	if markers[threadMarkerKey(types.TargetFile, "old.go")] != threadMarkerOpen {
+		t.Fatal("expected prior-round comment marker to remain visible")
 	}
 	if markers[threadMarkerKey(types.TargetFile, "open.go")] != threadMarkerOpen {
 		t.Fatal("expected current open marker")

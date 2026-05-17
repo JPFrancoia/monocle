@@ -20,6 +20,10 @@ type AutoSpawnOptions struct {
 	// Socket, when non-empty, overrides DefaultSocketPath(RepoRoot).
 	Socket string
 
+	// NewSession asks the spawned serve process to start a fresh session instead
+	// of resuming the latest session for the repo.
+	NewSession bool
+
 	// Binary is the monocle binary to exec. Defaults to the currently
 	// running executable (os.Executable), which keeps `go run ./cmd/...`
 	// and installed binaries behaving correctly.
@@ -75,6 +79,9 @@ func EnsureServe(opts AutoSpawnOptions) (socketPath string, spawned bool, err er
 	}
 	if opts.Socket != "" {
 		args = append(args, "--socket", opts.Socket)
+	}
+	if opts.NewSession {
+		args = append(args, "--new")
 	}
 
 	cmd := exec.Command(binary, args...)

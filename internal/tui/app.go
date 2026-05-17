@@ -492,7 +492,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
-			m.statusBar.commentCount = currentRoundCommentCount(session)
+			m.statusBar.commentCount = sessionCommentCount(session)
 		}
 		m.statusBar.fileCount = len(msg.files)
 		m.statusBar.socketStarted = m.engine.GetSocketPath() != ""
@@ -593,7 +593,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
-			m.statusBar.commentCount = currentRoundCommentCount(session)
+			m.statusBar.commentCount = sessionCommentCount(session)
 		}
 		// Auto-advance to next unreviewed item after marking reviewed
 		if msg.advance {
@@ -1120,7 +1120,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.statusBar.feedbackStatus = m.engine.GetFeedbackStatus()
 		session := m.engine.GetSession()
 		if session != nil {
-			m.statusBar.commentCount = currentRoundCommentCount(session)
+			m.statusBar.commentCount = sessionCommentCount(session)
 			m.statusBar.fileCount = len(session.ChangedFiles)
 			m.statusBar.baseRef = m.displayBaseRef(session)
 		}
@@ -1175,7 +1175,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.syncArtifactsAfterSubmit(session)
 
 		if session != nil {
-			m.statusBar.commentCount = currentRoundCommentCount(session)
+			m.statusBar.commentCount = sessionCommentCount(session)
 			m.statusBar.fileCount = len(session.ChangedFiles)
 		}
 
@@ -1301,7 +1301,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
-			m.statusBar.commentCount = currentRoundCommentCount(session)
+			m.statusBar.commentCount = sessionCommentCount(session)
 		}
 		// Reload current view to remove inline comment markers
 		if msg.reloadPath != "" && msg.isContent {
@@ -1325,7 +1325,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		session := m.engine.GetSession()
 		if session != nil {
 			m.statusBar.baseRef = m.displayBaseRef(session)
-			m.statusBar.commentCount = currentRoundCommentCount(session)
+			m.statusBar.commentCount = sessionCommentCount(session)
 		}
 		// If viewing a content item, it no longer exists — clear the view
 		if msg.isContent {
@@ -1357,7 +1357,7 @@ func (m appModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		recalcStackedLayout(&m)
 		session := m.engine.GetSession()
 		if session != nil {
-			m.statusBar.commentCount = currentRoundCommentCount(session)
+			m.statusBar.commentCount = sessionCommentCount(session)
 		}
 		if m.diffView.contentMode && m.diffView.contentID == msg.id {
 			m.diffView.contentMode = false
@@ -1940,7 +1940,7 @@ func (m appModel) executeCommand(cmd string) tea.Cmd {
 	case "discard":
 		return func() tea.Msg {
 			session := engine.GetSession()
-			if currentRoundCommentCount(session) == 0 {
+			if sessionCommentCount(session) == 0 {
 				return nil
 			}
 			return openConfirmMsg{
@@ -2704,7 +2704,7 @@ func commentsForTarget(session *types.ReviewSession, targetType types.TargetType
 	}
 	comments := make([]types.ReviewComment, 0)
 	for _, c := range session.Comments {
-		if c.ReviewRound != session.ReviewRound || c.TargetType != targetType || c.TargetRef != targetRef {
+		if c.TargetType != targetType || c.TargetRef != targetRef {
 			continue
 		}
 		comments = append(comments, c)
@@ -2712,17 +2712,11 @@ func commentsForTarget(session *types.ReviewSession, targetType types.TargetType
 	return comments
 }
 
-func currentRoundCommentCount(session *types.ReviewSession) int {
+func sessionCommentCount(session *types.ReviewSession) int {
 	if session == nil || len(session.Comments) == 0 {
 		return 0
 	}
-	count := 0
-	for _, c := range session.Comments {
-		if c.ReviewRound == session.ReviewRound {
-			count++
-		}
-	}
-	return count
+	return len(session.Comments)
 }
 
 func buildThreadMarkers(session *types.ReviewSession) map[string]threadMarkerState {
@@ -2731,9 +2725,6 @@ func buildThreadMarkers(session *types.ReviewSession) map[string]threadMarkerSta
 	}
 	markers := make(map[string]threadMarkerState)
 	for _, c := range session.Comments {
-		if c.ReviewRound != session.ReviewRound {
-			continue
-		}
 		key := threadMarkerKey(c.TargetType, c.TargetRef)
 		if !c.Resolved {
 			markers[key] = threadMarkerOpen

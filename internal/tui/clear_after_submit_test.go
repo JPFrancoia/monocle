@@ -146,7 +146,7 @@ func TestLoadInitialItemsFallsBackToCachedFilesOnRefreshError(t *testing.T) {
 	}
 }
 
-func TestHandleSidebarSelectFiltersPriorRoundFileComments(t *testing.T) {
+func TestHandleSidebarSelectShowsSessionFileComments(t *testing.T) {
 	session := &types.ReviewSession{
 		ID:          "test",
 		ReviewRound: 2,
@@ -164,11 +164,11 @@ func TestHandleSidebarSelectFiltersPriorRoundFileComments(t *testing.T) {
 	if !ok {
 		t.Fatalf("expected loadDiffMsg, got %T", msg)
 	}
-	if len(load.comments) != 1 {
-		t.Fatalf("expected 1 current-round file comment, got %+v", load.comments)
+	if len(load.comments) != 2 {
+		t.Fatalf("expected 2 session file comments, got %+v", load.comments)
 	}
-	if load.comments[0].ID != "current" {
-		t.Fatalf("expected current comment, got %q", load.comments[0].ID)
+	if load.comments[0].ID != "old" || load.comments[1].ID != "current" {
+		t.Fatalf("expected old and current file comments, got %+v", load.comments)
 	}
 }
 

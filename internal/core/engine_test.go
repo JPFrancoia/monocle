@@ -148,6 +148,44 @@ func TestRequestPauseAndCancel(t *testing.T) {
 	}
 }
 
+func TestStartSessionClearsTransientSessionState(t *testing.T) {
+	e, _ := setupTestEngine(t)
+	oldID := e.current.ID
+
+	e.feedback.Submit(&FormattedReview{Formatted: "review", CommentCount: 1, Action: "request_changes"}, false)
+	e.feedback.SetPauseRequested(true)
+	e.autoAdvanceRef = false
+	e.lastKnownHead = "old-head"
+	e.selectedRef = "manual-ref"
+	e.reviewBase = &types.ReviewSnapshot{ID: 123}
+
+	session, err := e.StartSession(SessionOptions{RepoRoot: "/tmp/test-repo"})
+	if err != nil {
+		t.Fatalf("StartSession: %v", err)
+	}
+	if session.ID == oldID {
+		t.Fatal("expected a new session ID")
+	}
+	if e.feedback.HasPending() {
+		t.Fatal("expected pending feedback to be cleared")
+	}
+	if e.feedback.IsPauseRequested() {
+		t.Fatal("expected pause state to be cleared")
+	}
+	if !e.autoAdvanceRef {
+		t.Fatal("expected auto-advance to reset to default")
+	}
+	if e.lastKnownHead != "" {
+		t.Fatalf("expected lastKnownHead to reset, got %q", e.lastKnownHead)
+	}
+	if e.selectedRef != "" {
+		t.Fatalf("expected selectedRef to reset, got %q", e.selectedRef)
+	}
+	if e.reviewBase != nil {
+		t.Fatal("expected review base to reset")
+	}
+}
+
 func TestAddComment(t *testing.T) {
 	database, err := db.Open(":memory:")
 	if err != nil {

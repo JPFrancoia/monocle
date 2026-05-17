@@ -10,11 +10,14 @@ The TUI title bar shows the active repository name, current branch, and selected
 ## Starting a session
 
 ```bash
-monocle                        # start a new session
+monocle                        # resume the latest session, or start one if none exists
+monocle --new                  # start a new session
 monocle --continue             # resume the most recent session
 monocle --resume               # open a picker to choose a previous session
 monocle --session <ID>         # resume a specific session by ID
 ```
+
+Use `--new` when you want a clean review context for the same repository. This is useful if you use a Git commit as your approval point and want the next review to start without the previous session's comments and reviewed marks.
 
 ## Adding files to review
 

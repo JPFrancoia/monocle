@@ -28,6 +28,43 @@ func TestCLIParsesWithoutIdleTimeoutFlag(t *testing.T) {
 	}
 }
 
+func TestCLIParsesNewSessionFlag(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli)
+	if err != nil {
+		t.Fatalf("kong setup failed: %v", err)
+	}
+	if _, err := parser.Parse([]string{"--new"}); err != nil {
+		t.Fatalf("parse --new: %v", err)
+	}
+	if !cli.Run.New {
+		t.Fatal("expected --new to set Run.New")
+	}
+
+	cli = CLI{}
+	parser, err = kong.New(&cli)
+	if err != nil {
+		t.Fatalf("kong setup failed: %v", err)
+	}
+	if _, err := parser.Parse([]string{"-n"}); err != nil {
+		t.Fatalf("parse -n: %v", err)
+	}
+	if !cli.Run.New {
+		t.Fatal("expected -n to set Run.New")
+	}
+}
+
+func TestCLIRejectsConflictingSessionFlags(t *testing.T) {
+	var cli CLI
+	parser, err := kong.New(&cli)
+	if err != nil {
+		t.Fatalf("kong setup failed: %v", err)
+	}
+	if _, err := parser.Parse([]string{"--new", "--continue"}); err == nil {
+		t.Fatal("expected --new and --continue to conflict")
+	}
+}
+
 func TestPidFilePath(t *testing.T) {
 	cases := []struct {
 		socket string

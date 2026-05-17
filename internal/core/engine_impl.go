@@ -35,9 +35,10 @@ type Engine struct {
 	hasUnreviewedActivity bool
 
 	// autoAdvanceRef: when true, baseRef advances to HEAD on each refresh
-	autoAdvanceRef bool
-	lastKnownHead  string
-	selectedRef    string // the commit the user picked (BaseRef stores its parent for diffing)
+	defaultAutoAdvance bool
+	autoAdvanceRef     bool
+	lastKnownHead      string
+	selectedRef        string // the commit the user picked (BaseRef stores its parent for diffing)
 
 	// reviewBase: when non-nil, the snapshot is the single source of truth for
 	// review tracking — file list merging, auto-unmark, and diff computation all
@@ -62,15 +63,17 @@ func NewEngine(cfg *types.Config, database *db.DB, repoRoot string, nonGitMode b
 	server := NewSocketServer()
 	feedback := NewFeedbackQueue()
 
+	defaultAutoAdvance := !nonGitMode
 	e := &Engine{
-		cfg:            cfg,
-		database:       database,
-		git:            git,
-		server:         server,
-		feedback:       feedback,
-		sessions:       NewSessionManager(database, git),
-		autoAdvanceRef: !nonGitMode,
-		subscribers:    make(map[EventKind]map[int]EventCallback),
+		cfg:                cfg,
+		database:           database,
+		git:                git,
+		server:             server,
+		feedback:           feedback,
+		sessions:           NewSessionManager(database, git),
+		defaultAutoAdvance: defaultAutoAdvance,
+		autoAdvanceRef:     defaultAutoAdvance,
+		subscribers:        make(map[EventKind]map[int]EventCallback),
 	}
 
 	e.formatter = NewReviewFormatter(func(path string, start, end int) string {
@@ -140,7 +143,13 @@ func (e *Engine) StartSession(opts SessionOptions) (*types.ReviewSession, error)
 	e.mu.Lock()
 	e.current = session
 	e.hasUnreviewedActivity = false
+	e.autoAdvanceRef = e.defaultAutoAdvance
+	e.lastKnownHead = ""
+	e.selectedRef = ""
+	e.reviewBase = nil
 	e.mu.Unlock()
+	e.feedback.ClearStatus()
+	e.feedback.SetPauseRequested(false)
 
 	return session, nil
 }

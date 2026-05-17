@@ -208,7 +208,8 @@ The comment editor supports standard emacs-style shortcuts:
 ## CLI
 
 ```
-monocle [--socket PATH]              Start a review session (auto-spawns owned monocle serve)
+monocle [--socket PATH]              Open the TUI, resuming the latest session or starting one
+monocle --new                        Start a new session for this repo
 monocle serve [--idle-timeout DUR]   Run a headless engine until stopped
 monocle stop                         Stop the running monocle serve for this repo
 monocle register [agent] [--global]  Register Monocle for an agent
